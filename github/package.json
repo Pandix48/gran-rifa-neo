@@ -1,0 +1,8 @@
+{
+  "name": "gran-rifa-neon",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/neon": "^0.7.0"
+  }
+}
