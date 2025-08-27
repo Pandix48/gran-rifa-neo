@@ -1,7 +1,7 @@
-import { neon } from '@netlify/neon'
+import { neon } from '@neondatabase/serverless'
 
-const sql = neon();
-
+// usa la URL que te inyecta la extensión de Netlify
+const sql = neon(process.env.NETLIFY_DATABASE_URL)
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS states (
     room TEXT PRIMARY KEY,
