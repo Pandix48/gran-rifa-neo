@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gran Rifa — Netlify DB (modo admin)</title>
   <style>
-    body{font-family:system-ui, -apple-system, sans-serif;background:#f7fafc;margin:0;color:#111827}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f7fafc;margin:0;color:#111827}
     header{background:#111827;color:#fff;padding:14px}
     h1{margin:0;font-size:20px;text-align:center}
     .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
@@ -14,14 +14,12 @@
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
     .row{display:flex;gap:8px;align-items:center;margin:6px 0}
     label{min-width:140px;color:#374151}
-    input, select, textarea{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px}
+    input,select,textarea{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px}
     textarea{min-height:120px}
     button{cursor:pointer;border:1px solid #94a3b8;background:#111827;color:#fff;border-radius:10px;padding:9px 12px}
     button.primary{background:#2563eb;border-color:#1d4ed8}
-    .admin-only{display:none}
     table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
     td,th{border-top:1px solid #e5e7eb;padding:8px;text-align:left}
-    code{background:#eef2ff;padding:2px 6px;border-radius:6px}
     .center{ text-align:center;color:#6b7280;margin:28px 0 }
   </style>
 </head>
@@ -33,8 +31,8 @@
   <div class="wrap">
     <div id="status" class="muted">Conectando…</div>
 
-    <!-- Controles de admin -->
-    <div id="adminControls" class="panel admin-only">
+    <!-- Controles admin -->
+    <div id="adminControls" class="panel">
       <h3>Controles (admin)</h3>
       <div class="grid">
 
@@ -67,7 +65,7 @@
           <button id="btnAddPrize">Añadir premio</button>
         </div>
 
-        <div class="row" style="grid-column:1/-1; align-items:flex-start;">
+        <div class="row" style="grid-column:1/-1;align-items:flex-start;">
           <label for="txtBulkNames" style="min-width:180px;">Nombres (uno por línea)</label>
           <textarea id="txtBulkNames" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
         </div>
@@ -91,26 +89,20 @@
   </div>
 
   <script>
-    // ========= CONFIG INICIAL =========
-    // Fuerza modo admin
+    // ====== Config: modo admin forzado ======
     const mode = "admin";
-    const isAdmin = true;
     document.getElementById("modeLabel").textContent = mode;
-    const adminPanel = document.getElementById("adminControls");
-    adminPanel.classList.remove("admin-only");
-    adminPanel.removeAttribute("aria-hidden");
 
-    // Room desde la URL o "demo"
     const params = new URLSearchParams(location.search);
     const room = params.get("room") || "demo";
 
-    // Elementos UI
+    // UI
     const statusEl = document.getElementById("status");
     const winnerEl = document.getElementById("winner");
     const winnersBody = document.getElementById("winnersBody");
     const emptyMsg = document.getElementById("emptyMsg");
 
-    // ========= RENDER =========
+    // ====== Render ======
     function render(state) {
       if (!state) {
         statusEl.textContent = "Esperando estado…";
@@ -120,22 +112,26 @@
         return;
       }
       emptyMsg.style.display = "none";
-      statusEl.textContent = `Estado: forma=${state.shape} | celdas ocupadas=${(state.filled||[]).length} | corriendo=${!!state.running}`;
 
-      // Ganador actual (si hubiera)
+      // tolera shape o shapeType
+      const shape = state.shape || state.shapeType || "star";
+      const filled = Array.isArray(state.filledCounts) ? state.filledCounts.reduce((a,b)=>a+(b||0),0) : 0;
+
+      statusEl.textContent = `Estado: forma=${shape} | celdas=${state.numCells ?? "?"} | formas/celda=${state.numShapes ?? "?"} | marcadas=${filled} | corriendo=${!!state.running}`;
+
       const current = (state.winners && state.winners.length) ? state.winners[state.winners.length - 1] : null;
-      winnerEl.textContent = current ? `Ganador: ${current}` : "Sin ganador aún";
+      winnerEl.textContent = current ? `Ganador: ${current.name ?? current}` : "Sin ganador aún";
 
-      // Tabla de ganadores
       winnersBody.innerHTML = "";
-      (state.winners||[]).forEach((name, i) => {
+      (state.winners || []).forEach((w, i) => {
+        const name = typeof w === "string" ? w : (w.name ?? JSON.stringify(w));
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>${i+1}</td><td>${name}</td>`;
         winnersBody.appendChild(tr);
       });
     }
 
-    // ========= CONSULTA (GET) =========
+    // ====== GET estado ======
     async function fetchState() {
       try {
         const res = await fetch(`/.netlify/functions/state?room=${encodeURIComponent(room)}`);
@@ -147,50 +143,51 @@
       }
     }
 
-    // Polling
     fetchState();
     let pollTimer = setInterval(fetchState, 1500);
 
-    // ========= ACCIONES (POST) =========
+    // ====== POST acciones (IMPORTANTE: aplanamos el payload) ======
     async function call(action, payload = {}) {
+      const body = { room, action, ...payload }; // <<<<<<<<<< aquí está el fix clave
       const res = await fetch(`/.netlify/functions/state`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ room, action, payload })
+        body: JSON.stringify(body)
       });
-      return res.json();
+      const data = await res.json().catch(()=>({}));
+      // refrescamos si vino nuevo estado
+      if (data && data.state) render(data.state);
+      return data;
     }
 
-    // ========= BIND BOTONES ADMIN =========
-    if (isAdmin) {
-      const $ = (id) => document.getElementById(id);
+    // ====== Acciones admin ======
+    const $ = (id) => document.getElementById(id);
 
-      $("btnGenerate").onclick = () => {
-        const n = parseInt($("numCells").value || "20", 10);
-        const k = parseInt($("numShapes").value || "2", 10);
-        const shape = $("shapeType").value || "star";
-        const intervalSec = Math.max(1, parseInt($("intervalSec").value || "5", 10));
-        return call("generate", { n, k, shape, intervalMs: intervalSec * 1000 });
-      };
+    $("btnGenerate").onclick = () => {
+      const n = parseInt($("numCells").value || "20", 10);
+      const k = parseInt($("numShapes").value || "2", 10);
+      const shape = $("shapeType").value || "star";
+      const intervalSec = Math.max(1, parseInt($("intervalSec").value || "5", 10));
+      return call("generate", { n, k, shape, intervalMs: intervalSec * 1000 });
+    };
 
-      $("btnReset").onclick = () => call("reset", {});
-      $("btnStart").onclick = () => call("start", {});
-      $("btnStop").onclick  = () => call("stop", {});
-      $("btnNext").onclick  = () => call("next", {});
+    $("btnReset").onclick = () => call("reset");
+    $("btnStart").onclick = () => call("start");
+    $("btnStop").onclick  = () => call("stop");
+    $("btnNext").onclick  = () => call("next");
 
-      $("btnAddPrize").onclick = async () => {
-        const prize = prompt("Nombre del premio:");
-        if (!prize) return;
-        await call("addPrize", { prize });
-      };
+    $("btnAddPrize").onclick = async () => {
+      const prize = prompt("Nombre del premio:");
+      if (!prize) return;
+      await call("addPrize", { prize });
+    };
 
-      $("btnSetNames").onclick = async () => {
-        const raw = $("txtBulkNames").value.trim();
-        if (!raw) return;
-        const names = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-        await call("setNames", { names });
-      };
-    }
+    $("btnSetNames").onclick = async () => {
+      const raw = $("txtBulkNames").value.trim();
+      if (!raw) return;
+      const names = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      await call("setNames", { names });
+    };
   </script>
 </body>
 </html>
