@@ -1,17 +1,9 @@
 // netlify/functions/state.mjs
-import { neon } from '@neondatabase/serverless';
+// Función mínima sin DB: guarda todo en memoria del proceso.
+// Te sirve para DESCARTAR errores de conexión y arrancar YA.
 
-const URL = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL;
-
-let sql = null;
-try {
-  if (URL) sql = neon(URL);
-} catch (_) {
-  sql = null;
-}
-
-// fallback en memoria si no hay DB
-globalThis.__MEM__ = globalThis.__MEM__ || new Map();
+const ROOMS = globalThis.__ROOMS__ || new Map();
+globalThis.__ROOMS__ = ROOMS;
 
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
@@ -20,11 +12,13 @@ function newState(n = 20, k = 2, shape = 'star') {
   k = clamp(Math.floor(k), 1, 20);
   const allowed = ['star', 'circle', 'diamond'];
   if (!allowed.includes(shape)) shape = 'star';
-  const base = {
+
+  const s = {
     running: false,
     numCells: n,
     numShapes: k,
     shapeType: shape,
+    shape, // compat front
     intervalMs: 5000,
     availableNumbers: Array.from({ length: n }, (_, i) => i + 1),
     names: Array.from({ length: n }, (_, i) => `#${i + 1}`),
@@ -32,63 +26,41 @@ function newState(n = 20, k = 2, shape = 'star') {
     prizes: [],
     winners: []
   };
-  return { ...base, shape: base.shapeType }; // compat con front
+  return s;
 }
 
-function expose(state) {
-  if (!state) return state;
-  if (!state.shape) state.shape = state.shapeType || 'star';
-  if (!state.shapeType) state.shapeType = state.shape;
-  return state;
+function get(room) {
+  return ROOMS.get(room) || null;
 }
-
-async function ensureTable() {
-  if (!sql) return;
-  await sql`CREATE TABLE IF NOT EXISTS states (
-    room TEXT PRIMARY KEY,
-    state JSONB NOT NULL
-  )`;
-}
-
-async function getState(room) {
-  if (!sql) return globalThis.__MEM__.get(room) || null;
-  await ensureTable();
-  const rows = await sql`SELECT state FROM states WHERE room = ${room}`;
-  return rows.length ? rows[0].state : null;
-}
-
-async function saveState(room, state) {
-  const s = expose({ ...state });
-  if (!sql) { globalThis.__MEM__.set(room, s); return; }
-  await ensureTable();
-  await sql`INSERT INTO states (room, state) VALUES (${room}, ${s})
-            ON CONFLICT (room) DO UPDATE SET state = EXCLUDED.state`;
+function set(room, state) {
+  ROOMS.set(room, state);
 }
 
 export default async (request) => {
   try {
     if (request.method === 'GET') {
-  const { searchParams } = new URL(request.url, "http://localhost"); 
-  const room = (searchParams.get('room') || 'demo').trim();
-  let state = await getState(room);
+      // ¡OJO! URL absoluta para evitar "URL is not a constructor"
+      const { searchParams } = new URL(request.url, 'http://localhost');
+      const room = (searchParams.get('room') || 'demo').trim() || 'demo';
 
-  // Auto-crea si no existe
-  if (!state) {
-    state = newState(20, 2, 'star');
-    await saveState(room, state);
-  }
+      let state = get(room);
+      // Auto-crear si no existe (evita "Esperando estado")
+      if (!state) {
+        state = newState(20, 2, 'star');
+        set(room, state);
+      }
 
-  return new Response(JSON.stringify({ ok: true, state }), {
-    status: 200,
-    headers: { 'content-type': 'application/json' }
-  });
-}
+      return new Response(JSON.stringify({ ok: true, state }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      const room = (body.room || 'demo').trim();
+      const room = (body.room || 'demo').trim() || 'demo';
       const action = body.action;
-      let state = await getState(room);
-      if (!state) { state = newState(); }
+      let state = get(room) || newState();
 
       switch (action) {
         case 'generate': {
@@ -96,25 +68,25 @@ export default async (request) => {
           const k = body.k ?? 2;
           const shape = body.shape ?? 'star';
           state = newState(n, k, shape);
-          state.intervalMs = Math.max(1000, parseInt(body.intervalMs || 5000));
-          await saveState(room, state);
+          state.intervalMs = Math.max(1000, parseInt(body.intervalMs || 5000, 10));
+          set(room, state);
           break;
         }
         case 'reset': {
           const base = newState(state.numCells, state.numShapes, state.shapeType || state.shape || 'star');
           base.prizes = state.prizes || [];
+          set(room, base);
           state = base;
-          await saveState(room, state);
           break;
         }
         case 'start': {
           state.running = true;
-          await saveState(room, state);
+          set(room, state);
           break;
         }
         case 'stop': {
           state.running = false;
-          await saveState(room, state);
+          set(room, state);
           break;
         }
         case 'next': {
@@ -129,14 +101,14 @@ export default async (request) => {
               state.winners = [ ...(state.winners || []), { name, prize, number } ];
               state.availableNumbers = state.availableNumbers.filter(n => n !== number);
             }
-            await saveState(room, state);
+            set(room, state);
           }
           break;
         }
         case 'addPrize': {
-          const prize = (body.prize || '').toString();
+          const prize = (body.prize || '').toString().trim();
           if (prize) state.prizes = [ ...(state.prizes || []), prize ];
-          await saveState(room, state);
+          set(room, state);
           break;
         }
         case 'setNames': {
@@ -144,7 +116,7 @@ export default async (request) => {
           for (let i = 0; i < Math.min(names.length, state.names.length); i++) {
             state.names[i] = names[i];
           }
-          await saveState(room, state);
+          set(room, state);
           break;
         }
         default:
@@ -153,7 +125,7 @@ export default async (request) => {
           });
       }
 
-      return new Response(JSON.stringify({ ok: true, state: expose(state) }), {
+      return new Response(JSON.stringify({ ok: true, state }), {
         status: 200, headers: { 'content-type': 'application/json' }
       });
     }
@@ -167,3 +139,4 @@ export default async (request) => {
     });
   }
 };
+
