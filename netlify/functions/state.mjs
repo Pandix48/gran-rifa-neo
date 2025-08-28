@@ -61,14 +61,21 @@ async function saveState(room, state){
 export default async (request, context) => {
   try{
     if (request.method === 'GET') {
-      const { searchParams } = new URL(request.url);
-      const room = (searchParams.get('room') || 'demo').trim() || 'demo';
-      const state = await getState(room);
-      return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
-        status:200, headers: { 'content-type':'application/json' }
-      });
-    }
+  const { searchParams } = new URL(request.url);
+  const room = (searchParams.get('room') || 'demo').trim() || 'demo';
+  let state = await getState(room);
 
+  // 👇 Auto-crear si no existe
+  if (!state) {
+    state = newState(20, 2, 'star'); // valores por defecto
+    await saveState(room, state);
+  }
+
+  return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
+    status: 200,
+    headers: { 'content-type':'application/json' }
+  });
+}
     if (request.method === 'POST') {
       const body = await request.json();
       const room = (body.room || 'demo').trim() || 'demo';
