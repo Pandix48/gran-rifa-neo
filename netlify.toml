@@ -1,0 +1,15 @@
+# netlify.toml
+
+[build]
+# No hay build (tu sitio es estático)
+command = ""
+# Publica desde la raíz del repo (donde está index.html)
+publish = "."
+
+[functions]
+# Carpeta donde está tu state.(js|mjs)
+directory = "netlify/functions"
+node_bundler = "esbuild"
+
+[build.environment]
+NODE_VERSION = "22"
