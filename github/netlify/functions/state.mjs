@@ -1,160 +1,194 @@
-// netlify/functions/state.js
-import { neon } from '@neondatabase/serverless';
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gran Rifa — Netlify DB (modo admin)</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f7fafc;margin:0;color:#111827}
+    header{background:#111827;color:#fff;padding:14px}
+    h1{margin:0;font-size:20px;text-align:center}
+    .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
+    .muted{color:#6b7280}
+    .panel{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:14px 0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .row{display:flex;gap:8px;align-items:center;margin:6px 0}
+    label{min-width:140px;color:#374151}
+    input,select,textarea{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px}
+    textarea{min-height:120px}
+    button{cursor:pointer;border:1px solid #94a3b8;background:#111827;color:#fff;border-radius:10px;padding:9px 12px}
+    button.primary{background:#2563eb;border-color:#1d4ed8}
+    table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+    td,th{border-top:1px solid #e5e7eb;padding:8px;text-align:left}
+    .center{ text-align:center;color:#6b7280;margin:28px 0 }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gran Rifa — Netlify DB (modo <span id="modeLabel">admin</span>)</h1>
+  </header>
 
-// Usa la URL que te inyecta Netlify (o crea DATABASE_URL alias)
-const sql = neon(process.env.NETLIFY_DATABASE_URL);
+  <div class="wrap">
+    <div id="status" class="muted">Conectando…</div>
 
-async function ensureTable() {
-  await sql`CREATE TABLE IF NOT EXISTS states (
-    room TEXT PRIMARY KEY,
-    state JSONB NOT NULL
-  );`;
-}
+    <!-- Controles admin -->
+    <div id="adminControls" class="panel">
+      <h3>Controles (admin)</h3>
+      <div class="grid">
 
-function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+        <div class="row"><label for="numCells">Celdas</label>
+          <input id="numCells" type="number" value="20" min="1" />
+        </div>
 
-function newState(n=20,k=2,shape='star') {
-  n = clamp(Math.floor(n), 1, 500);
-  k = clamp(Math.floor(k), 1, 20);
-  const allowed = ['star','circle','diamond'];
-  if (!allowed.includes(shape)) shape='star';
-  // Guardamos shapeType internamente, pero también exponemos "shape" para el front
-  const base = {
-    running:false,
-    numCells:n,
-    numShapes:k,
-    shapeType: shape,           // interno
-    intervalMs:5000,
-    availableNumbers: Array.from({length:n}, (_,i)=>i+1),
-    names: Array.from({length:n}, (_,i)=>`#${i+1}`),
-    filledCounts: Array.from({length:n}, ()=>0),
-    prizes: [],
-    winners: []
-  };
-  return { ...base, shape: base.shapeType }; // compatibilidad con el front
-}
+        <div class="row"><label for="numShapes">Formas / celdas</label>
+          <input id="numShapes" type="number" value="2" min="1" />
+        </div>
 
-function expose(state) {
-  // Siempre devuelve también "shape" además de "shapeType"
-  if (!state) return state;
-  if (!state.shape) state.shape = state.shapeType || 'star';
-  return state;
-}
+        <div class="row"><label for="shapeType">Forma</label>
+          <select id="shapeType">
+            <option value="star">Estrella</option>
+            <option value="circle">Círculo</option>
+            <option value="diamond">Diamante</option>
+          </select>
+        </div>
 
-async function getState(room){
-  await ensureTable();
-  const rows = await sql`SELECT state FROM states WHERE room = ${room}`;
-  if (rows.length) return expose(rows[0].state);
-  return null;
-}
+        <div class="row"><label for="intervalSec">Intervalo (seg)</label>
+          <input id="intervalSec" type="number" value="5" min="1" />
+        </div>
 
-async function saveState(room, state){
-  await ensureTable();
-  // Aseguramos shape/shapeType consistentes al guardar
-  const s = { ...state };
-  if (!s.shapeType && s.shape) s.shapeType = s.shape;
-  if (!s.shape && s.shapeType) s.shape = s.shapeType;
-  await sql`INSERT INTO states (room, state) VALUES (${room}, ${s}) 
-            ON CONFLICT (room) DO UPDATE SET state = EXCLUDED.state;`;
-}
+        <div class="row">
+          <button id="btnGenerate" class="primary">Generar tablero</button>
+          <button id="btnReset">Reset</button>
+          <button id="btnStart">Start</button>
+          <button id="btnStop">Stop</button>
+          <button id="btnNext">Next</button>
+          <button id="btnAddPrize">Añadir premio</button>
+        </div>
 
-export default async (request, context) => {
-  try{
-    if (request.method === 'GET') {
-      const { searchParams } = new URL(request.url);
-      const room = (searchParams.get('room') || 'demo').trim() || 'demo';
-      const state = await getState(room);
-      return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
-        status:200, headers: { 'content-type':'application/json' }
-      });
-    }
+        <div class="row" style="grid-column:1/-1;align-items:flex-start;">
+          <label for="txtBulkNames" style="min-width:180px;">Nombres (uno por línea)</label>
+          <textarea id="txtBulkNames" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
+        </div>
 
-    if (request.method === 'POST') {
-      const body = await request.json();
-      const room = (body.room || 'demo').trim() || 'demo';
-      const action = body.action;
-      let state = await getState(room);
+        <div class="row">
+          <button id="btnSetNames">Guardar nombres</button>
+        </div>
+      </div>
+    </div>
 
-      switch(action){
-        case 'generate': {
-          const n = body.n ?? 20;
-          const k = body.k ?? 2;
-          const shape = body.shape ?? 'star';
-          state = newState(n,k,shape);
-          state.intervalMs = Math.max(1000, parseInt(body.intervalMs || 5000));
-          await saveState(room, state);
-          break;
-        }
-        case 'reset': {
-          if (!state) state = newState();
-          const base = newState(state.numCells, state.numShapes, state.shapeType || state.shape || 'star');
-          base.prizes = state.prizes || [];
-          state = base;
-          await saveState(room, state);
-          break;
-        }
-        case 'start': {
-          if (!state) state = newState();
-          state.running = true;
-          await saveState(room, state);
-          break;
-        }
-        case 'stop': {
-          if (!state) state = newState();
-          state.running = false;
-          await saveState(room, state);
-          break;
-        }
-        case 'next': {
-          if (!state) state = newState();
-          if (state.availableNumbers.length > 0){
-            const idx = Math.floor(Math.random()*state.availableNumbers.length);
-            const number = state.availableNumbers[idx];
-            const cur = (state.filledCounts[number-1] || 0) + 1;
-            state.filledCounts[number-1] = Math.min(cur, state.numShapes);
-            if (state.filledCounts[number-1] >= state.numShapes){
-              const name = state.names[number-1] || `#${number}`;
-              const prize = (state.prizes||[])[(state.winners||[]).length] || 'Premio';
-              state.winners = [...(state.winners||[]), { name, prize, number }];
-              state.availableNumbers = state.availableNumbers.filter(n=>n!==number);
-            }
-            await saveState(room, state);
-          }
-          break;
-        }
-        case 'addPrize': {
-          if (!state) state = newState();
-          const prize = (body.prize || '').toString();
-          if (prize) state.prizes = [...(state.prizes||[]), prize];
-          await saveState(room, state);
-          break;
-        }
-        case 'setNames': {
-          if (!state) state = newState();
-          const names = Array.isArray(body.names) ? body.names.map(x=>x.toString()) : [];
-          for(let i=0; i<Math.min(names.length, state.names.length); i++){
-            state.names[i] = names[i];
-          }
-          await saveState(room, state);
-          break;
-        }
-        default:
-          return new Response(JSON.stringify({ ok:false, error:'Acción no soportada' }), {
-            status:400, headers: { 'content-type':'application/json' }
-          });
+    <div class="panel">
+      <h3>Resumen</h3>
+      <div id="winner" class="row muted">—</div>
+      <table id="winners" aria-live="polite">
+        <thead><tr><th>#</th><th>Ganador</th></tr></thead>
+        <tbody id="winnersBody"></tbody>
+      </table>
+    </div>
+
+    <div id="emptyMsg" class="center" style="display:none;">No hay datos todavía.</div>
+  </div>
+
+  <script>
+    // ====== Config: modo admin forzado ======
+    const mode = "admin";
+    document.getElementById("modeLabel").textContent = mode;
+
+    const params = new URLSearchParams(location.search);
+    const room = params.get("room") || "demo";
+
+    // UI
+    const statusEl = document.getElementById("status");
+    const winnerEl = document.getElementById("winner");
+    const winnersBody = document.getElementById("winnersBody");
+    const emptyMsg = document.getElementById("emptyMsg");
+
+    // ====== Render ======
+    function render(state) {
+      if (!state) {
+        statusEl.textContent = "Esperando estado…";
+        winnersBody.innerHTML = "";
+        winnerEl.textContent = "—";
+        emptyMsg.style.display = "block";
+        return;
       }
+      emptyMsg.style.display = "none";
 
-      return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
-        status:200, headers: { 'content-type':'application/json' }
+      // tolera shape o shapeType
+      const shape = state.shape || state.shapeType || "star";
+      const filled = Array.isArray(state.filledCounts) ? state.filledCounts.reduce((a,b)=>a+(b||0),0) : 0;
+
+      statusEl.textContent = `Estado: forma=${shape} | celdas=${state.numCells ?? "?"} | formas/celda=${state.numShapes ?? "?"} | marcadas=${filled} | corriendo=${!!state.running}`;
+
+      const current = (state.winners && state.winners.length) ? state.winners[state.winners.length - 1] : null;
+      winnerEl.textContent = current ? `Ganador: ${current.name ?? current}` : "Sin ganador aún";
+
+      winnersBody.innerHTML = "";
+      (state.winners || []).forEach((w, i) => {
+        const name = typeof w === "string" ? w : (w.name ?? JSON.stringify(w));
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${i+1}</td><td>${name}</td>`;
+        winnersBody.appendChild(tr);
       });
     }
 
-    return new Response(JSON.stringify({ ok:false, error:'Método no soportado' }), {
-      status:405, headers: { 'content-type':'application/json' }
-    });
-  }catch(e){
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), {
-      status:500, headers: { 'content-type':'application/json' }
-    });
-  }
-}
+    // ====== GET estado ======
+    async function fetchState() {
+      try {
+        const res = await fetch(`/.netlify/functions/state?room=${encodeURIComponent(room)}`);
+        const data = await res.json();
+        render(data.state || null);
+      } catch (e) {
+        statusEl.textContent = "No se pudo leer estado.";
+        console.error(e);
+      }
+    }
+
+    fetchState();
+    let pollTimer = setInterval(fetchState, 1500);
+
+    // ====== POST acciones (IMPORTANTE: aplanamos el payload) ======
+    async function call(action, payload = {}) {
+      const body = { room, action, ...payload }; // <<<<<<<<<< aquí está el fix clave
+      const res = await fetch(`/.netlify/functions/state`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(()=>({}));
+      // refrescamos si vino nuevo estado
+      if (data && data.state) render(data.state);
+      return data;
+    }
+
+    // ====== Acciones admin ======
+    const $ = (id) => document.getElementById(id);
+
+    $("btnGenerate").onclick = () => {
+      const n = parseInt($("numCells").value || "20", 10);
+      const k = parseInt($("numShapes").value || "2", 10);
+      const shape = $("shapeType").value || "star";
+      const intervalSec = Math.max(1, parseInt($("intervalSec").value || "5", 10));
+      return call("generate", { n, k, shape, intervalMs: intervalSec * 1000 });
+    };
+
+    $("btnReset").onclick = () => call("reset");
+    $("btnStart").onclick = () => call("start");
+    $("btnStop").onclick  = () => call("stop");
+    $("btnNext").onclick  = () => call("next");
+
+    $("btnAddPrize").onclick = async () => {
+      const prize = prompt("Nombre del premio:");
+      if (!prize) return;
+      await call("addPrize", { prize });
+    };
+
+    $("btnSetNames").onclick = async () => {
+      const raw = $("txtBulkNames").value.trim();
+      if (!raw) return;
+      const names = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      await call("setNames", { names });
+    };
+  </script>
+</body>
+</html>
+
