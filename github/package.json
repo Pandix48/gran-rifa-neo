@@ -1,7 +1,11 @@
 {
-  "name": "gran-rifa-neon",
+  "name": "gran-rifa-neo",
   "private": true,
   "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "build": "echo 'no build step required'"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.0"
   }
