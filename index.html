@@ -1,3 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gran Rifa — Netlify</title>
+  <style>
+    :root{--bg:#f7f8fb;--card:#fff;--text:#111827;--muted:#6b7280;--primary:#111827;--ring:#e5e7eb}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"}
+    header{padding:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--ring)}
+    h1{font-size:16px;margin:0}
+    #status{font-size:14px;color:var(--muted)}
+    main{max-width:1100px;margin:18px auto;padding:0 18px}
+    .card{background:var(--card);border:1px solid var(--ring);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:18px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0}
+    label{font-size:14px;color:var(--muted)}
+    input[type="number"],select,textarea,input[type="text"]{border:1px solid var(--ring);border-radius:10px;padding:8px 10px;font-size:14px;background:#fff;color:var(--text)}
+    textarea{width:100%;min-height:120px}
+    button{background:var(--primary);color:#fff;border:0;border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
+    button.ghost{background:#0f172a0d;color:var(--text)}
+    button.bad{background:#dc2626}
+    button:disabled{opacity:.6;cursor:not-allowed}
+
+    .board{margin-top:16px;display:grid;grid-gap:12px}
+    .cell{background:#fff;border:1px solid var(--ring);border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .cell h4{margin:0 0 6px 0;font-size:14px;font-weight:600}
+    .cell h4[contenteditable="true"]{outline:2px solid #bfdbfe;border-radius:6px;padding:2px 4px}
+    .shapes{display:flex;gap:6px;flex-wrap:wrap}
+    .shape svg{width:20px;height:20px;display:block;opacity:.35}
+    .shape.filled svg{opacity:1;filter:drop-shadow(0 0 1px rgba(0,0,0,.2))}
+    .shape.star   svg path   {fill:#f59e0b}
+    .shape.circle svg circle {fill:#60a5fa}
+    .shape.diamond svg path  {fill:#34d399}
+
+    table{width:100%;border-collapse:collapse}
+    td,th{border-top:1px solid var(--ring);padding:10px;font-size:14px}
+    #emptyMsg{color:var(--muted);font-size:14px;margin:6px 0}
+
+    /* Prizes list */
+    .prize-row{display:flex;gap:8px;align-items:center;margin:6px 0}
+    .prize-row input{flex:1}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gran Rifa — Netlify</h1>
+    <span id="status">Cargando…</span>
+  </header>
+
+  <main>
+    <!-- Controles admin -->
+    <section id="controls" class="card" style="display:none">
+      <h2 style="font-size:18px;margin:0 0 8px 0">Controles (admin)</h2>
+
+      <div class="row">
+        <label>Celdas</label>
+        <input id="numCells" type="number" min="1" value="20" />
+        <label>Formas / celda</label>
+        <input id="numShapes" type="number" min="1" value="2" />
+        <label>Forma</label>
+        <select id="shapeType">
+          <option value="star">Estrella</option>
+          <option value="circle">Círculo</option>
+          <option value="diamond">Diamante</option>
+        </select>
+        <label>Intervalo (seg)</label>
+        <input id="intervalSec" type="number" min="1" value="5" />
+      </div>
+
+      <div class="row">
+        <button id="btnGenerate">Generar tablero</button>
+        <button id="btnReset" class="ghost">Reset</button>
+        <button id="btnStart" class="ghost">Start</button>
+        <button id="btnStop"  class="ghost">Stop</button>
+        <button id="btnNext"  class="ghost">Next</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
+
+      <!-- PRIZES MANAGER -->
+      <h3 style="margin:0 0 6px 0">Premios</h3>
+      <div id="prizesList"></div>
+      <div class="row">
+        <input id="newPrizeText" type="text" placeholder="Nombre del premio…" />
+        <button id="btnAddPrize" class="ghost">Añadir premio</button>
+        <button id="btnSavePrizes" class="ghost">Guardar lista</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
+
+      <!-- NOMBRES MASIVOS (opcional) -->
+      <h3 style="margin:0 0 6px 0">Nombres (uno por línea)</h3>
+      <textarea id="namesText" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
+      <div class="row"><button id="btnSaveNames" class="ghost">Guardar nombres</button></div>
+
+      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
+
+      <!-- VOZ -->
+      <h3 style="margin:0 0 6px 0">Voz del anuncio</h3>
+      <div class="row">
+        <label>Voz</label>
+        <select id="voiceSelect"></select>
+        <label>Volumen</label>
+        <input id="volRange" type="number" min="0" max="1" step="0.1" value="1" />
+        <label>Velocidad</label>
+        <input id="rateRange" type="number" min="0.5" max="2" step="0.1" value="1" />
+        <button id="btnTestVoice" class="ghost">Probar</button>
+      </div>
+    </section>
+
+    <!-- Tablero -->
+    <section class="card">
+      <div id="board" class="board"></div>
+    </section>
+
+    <!-- Resumen -->
+    <section class="card" style="margin-top:16px">
+      <h2 style="font-size:18px;margin:0 0 8px 0">Resumen</h2>
+      <div id="emptyMsg">Sin ganador aún</div>
+      <table>
+        <thead><tr><th style="width:60px">#</th><th>Ganador</th></tr></thead>
+        <tbody id="winnersBody"></tbody>
+      </table>
+    </section>
+  </main>
+
 <script>
   // ====== Básicos ======
   const qs = (s, r=document) => r.querySelector(s);
@@ -296,6 +423,8 @@
     poll();
   });
 </script>
+</body>
+</html>
 
 
 
