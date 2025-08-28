@@ -1,369 +1,301 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Gran Rifa — Netlify</title>
-  <style>
-    :root{--bg:#f7f8fb;--card:#fff;--text:#111827;--muted:#6b7280;--primary:#111827;--ring:#e5e7eb}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"}
-    header{padding:18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--ring)}
-    h1{font-size:16px;margin:0}
-    #status{font-size:14px;color:var(--muted)}
-    main{max-width:1100px;margin:18px auto;padding:0 18px}
-    .card{background:var(--card);border:1px solid var(--ring);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:18px}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:8px 0}
-    label{font-size:14px;color:var(--muted)}
-    input[type="number"],select,textarea,input[type="text"]{border:1px solid var(--ring);border-radius:10px;padding:8px 10px;font-size:14px;background:#fff;color:var(--text)}
-    textarea{width:100%;min-height:120px}
-    button{background:var(--primary);color:#fff;border:0;border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
-    button.ghost{background:#0f172a0d;color:var(--text)}
-    button.bad{background:#dc2626}
-    button:disabled{opacity:.6;cursor:not-allowed}
+<script>
+  // ====== Básicos ======
+  const qs = (s, r=document) => r.querySelector(s);
+  const statusEl    = qs('#status');
+  const boardEl     = qs('#board');
+  const winnersBody = qs('#winnersBody');
+  const emptyMsg    = qs('#emptyMsg');
+  const urlp        = new URLSearchParams(location.search);
+  const room        = (urlp.get('room') || 'demo').trim();
+  const isAdmin     = urlp.get('admin') === '1';
+  if (isAdmin) qs('#controls').style.display = 'block';
 
-    .board{margin-top:16px;display:grid;grid-gap:12px}
-    .cell{background:#fff;border:1px solid var(--ring);border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-    .cell h4{margin:0 0 6px 0;font-size:14px;font-weight:600}
-    .cell h4[contenteditable="true"]{outline:2px solid #bfdbfe;border-radius:6px;padding:2px 4px}
-    .shapes{display:flex;gap:6px;flex-wrap:wrap}
-    .shape svg{width:20px;height:20px;display:block;opacity:.35}
-    .shape.filled svg{opacity:1;filter:drop-shadow(0 0 1px rgba(0,0,0,.2))}
-    .shape.star   svg path   {fill:#f59e0b}
-    .shape.circle svg circle {fill:#60a5fa}
-    .shape.diamond svg path  {fill:#34d399}
+  // ====== Voz ======
+  const voiceSelect = qs('#voiceSelect');
+  const volRange    = qs('#volRange');
+  const rateRange   = qs('#rateRange');
+  const speak = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.volume = parseFloat(volRange?.value ?? '1');
+    u.rate   = parseFloat(rateRange?.value ?? '1');
+    const id = voiceSelect?.value;
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(v => v.voiceURI === id || v.name === id);
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  };
+  function populateVoices() {
+    if (!('speechSynthesis' in window) || !voiceSelect) return;
+    const voices = speechSynthesis.getVoices();
+    voiceSelect.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.voiceURI || v.name;
+      opt.textContent = `${v.name} (${v.lang})`;
+      voiceSelect.appendChild(opt);
+    });
+  }
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = populateVoices;
+    populateVoices();
+    qs('#btnTestVoice')?.addEventListener('click', () => speak('Esta es una prueba de voz.'));
+  }
 
-    table{width:100%;border-collapse:collapse}
-    td,th{border-top:1px solid var(--ring);padding:10px;font-size:14px}
-    #emptyMsg{color:var(--muted);font-size:14px;margin:6px 0}
+  // ====== Dibujo del tablero ======
+  function shapeSVG(type) {
+    if (type === 'circle')  return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>`;
+    if (type === 'diamond') return `<svg viewBox="0 0 24 24"><path d="M12 2 L22 12 L12 22 L2 12 Z"/></svg>`;
+    return `<svg viewBox="0 0 24 24"><path d="M12 2l2.95 6.31 6.92.56-5.26 4.48 1.64 6.74L12 16.9 5.75 20.1l1.64-6.74L2.13 8.87l6.92-.56L12 2z"/></svg>`;
+  }
+  const gridCols = n => Math.ceil(Math.sqrt(n));
 
-    /* Prizes list */
-    .prize-row{display:flex;gap:8px;align-items:center;margin:6px 0}
-    .prize-row input{flex:1}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Gran Rifa — Netlify</h1>
-    <span id="status">Cargando…</span>
-  </header>
+  // ====== Estado de UI para evitar “parpadeos” mientras editas ======
+  let isEditing = false;      // true mientras hay un nombre en modo edición
+  let editingIndex = null;    // índice de la celda que estás editando (o null)
+  let lastState = null;       // última foto del estado dibujado
+  let lastWinnersCount = 0;   // para anunciar solo ganadores nuevos
 
-  <main>
-    <!-- Controles admin -->
-    <section id="controls" class="card" style="display:none">
-      <h2 style="font-size:18px;margin:0 0 8px 0">Controles (admin)</h2>
+  // ====== Auto-Next (Start) ======
+  let autoNextTimer = null;
+  let autoNextEvery = null;  // ms actual programado
 
-      <div class="row">
-        <label>Celdas</label>
-        <input id="numCells" type="number" min="1" value="20" />
-        <label>Formas / celda</label>
-        <input id="numShapes" type="number" min="1" value="2" />
-        <label>Forma</label>
-        <select id="shapeType">
-          <option value="star">Estrella</option>
-          <option value="circle">Círculo</option>
-          <option value="diamond">Diamante</option>
-        </select>
-        <label>Intervalo (seg)</label>
-        <input id="intervalSec" type="number" min="1" value="5" />
-      </div>
-
-      <div class="row">
-        <button id="btnGenerate">Generar tablero</button>
-        <button id="btnReset" class="ghost">Reset</button>
-        <button id="btnStart" class="ghost">Start</button>
-        <button id="btnStop"  class="ghost">Stop</button>
-        <button id="btnNext"  class="ghost">Next</button>
-      </div>
-
-      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
-
-      <!-- PRIZES MANAGER -->
-      <h3 style="margin:0 0 6px 0">Premios</h3>
-      <div id="prizesList"></div>
-      <div class="row">
-        <input id="newPrizeText" type="text" placeholder="Nombre del premio…" />
-        <button id="btnAddPrize" class="ghost">Añadir premio</button>
-        <button id="btnSavePrizes" class="ghost">Guardar lista</button>
-      </div>
-
-      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
-
-      <!-- NOMBRES MASIVOS (opcional) -->
-      <h3 style="margin:0 0 6px 0">Nombres (uno por línea)</h3>
-      <textarea id="namesText" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
-      <div class="row"><button id="btnSaveNames" class="ghost">Guardar nombres</button></div>
-
-      <hr style="border:none;border-top:1px solid var(--ring);margin:12px 0" />
-
-      <!-- VOZ -->
-      <h3 style="margin:0 0 6px 0">Voz del anuncio</h3>
-      <div class="row">
-        <label>Voz</label>
-        <select id="voiceSelect"></select>
-        <label>Volumen</label>
-        <input id="volRange" type="number" min="0" max="1" step="0.1" value="1" />
-        <label>Velocidad</label>
-        <input id="rateRange" type="number" min="0.5" max="2" step="0.1" value="1" />
-        <button id="btnTestVoice" class="ghost">Probar</button>
-      </div>
-    </section>
-
-    <!-- Tablero -->
-    <section class="card">
-      <div id="board" class="board"></div>
-    </section>
-
-    <!-- Resumen -->
-    <section class="card" style="margin-top:16px">
-      <h2 style="font-size:18px;margin:0 0 8px 0">Resumen</h2>
-      <div id="emptyMsg">Sin ganador aún</div>
-      <table>
-        <thead><tr><th style="width:60px">#</th><th>Ganador</th></tr></thead>
-        <tbody id="winnersBody"></tbody>
-      </table>
-    </section>
-  </main>
-
-  <script>
-    // ====== Básicos ======
-    const qs = (s, r=document) => r.querySelector(s);
-    const statusEl    = qs('#status');
-    const boardEl     = qs('#board');
-    const winnersBody = qs('#winnersBody');
-    const emptyMsg    = qs('#emptyMsg');
-    const urlp        = new URLSearchParams(location.search);
-    const room        = (urlp.get('room') || 'demo').trim();
-    const isAdmin     = urlp.get('admin') === '1'; // muestra admin solo con ?admin=1
-    if (isAdmin) qs('#controls').style.display = 'block';
-
-    // ====== Voz ======
-    const voiceSelect = qs('#voiceSelect');
-    const volRange    = qs('#volRange');
-    const rateRange   = qs('#rateRange');
-    const speak = (text) => {
-      if (!('speechSynthesis' in window)) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.volume = parseFloat(volRange.value || '1');
-      u.rate   = parseFloat(rateRange.value || '1');
-      const id = voiceSelect.value;
-      const voices = speechSynthesis.getVoices();
-      const v = voices.find(v => v.voiceURI === id || v.name === id);
-      if (v) u.voice = v;
-      speechSynthesis.speak(u);
-    };
-    function populateVoices() {
-      if (!('speechSynthesis' in window)) return;
-      const voices = speechSynthesis.getVoices();
-      voiceSelect.innerHTML = '';
-      voices.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v.voiceURI || v.name;
-        opt.textContent = `${v.name} (${v.lang})`;
-        voiceSelect.appendChild(opt);
-      });
+  function clearAutoNext(){
+    if (autoNextTimer) {
+      clearInterval(autoNextTimer);
+      autoNextTimer = null;
+      autoNextEvery = null;
     }
-    if ('speechSynthesis' in window) {
-      speechSynthesis.onvoiceschanged = populateVoices;
-      populateVoices();
-      qs('#btnTestVoice')?.addEventListener('click', () => speak('Esta es una prueba de voz.'));
+  }
+
+  async function ensureAutoNext(state){
+    if (!isAdmin) { clearAutoNext(); return; } // solo el admin dispara el auto-next
+    const ms = Math.max(1000, state?.intervalMs || 5000);
+
+    if (!state?.running) { clearAutoNext(); return; }
+
+    // si cambia el intervalo, reinicio
+    if (autoNextEvery !== ms) {
+      clearAutoNext();
+      autoNextEvery = ms;
+      autoNextTimer = setInterval(async () => {
+        try {
+          await call('next');
+          // no forzamos render inmediato; poll cada 1s lo traerá
+        } catch (e) { /* ignore */ }
+      }, ms);
     }
+  }
 
-    // ====== Render tablero ======
-    function shapeSVG(type) {
-      if (type === 'circle')  return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>`;
-      if (type === 'diamond') return `<svg viewBox="0 0 24 24"><path d="M12 2 L22 12 L12 22 L2 12 Z"/></svg>`;
-      return `<svg viewBox="0 0 24 24"><path d="M12 2l2.95 6.31 6.92.56-5.26 4.48 1.64 6.74L12 16.9 5.75 20.1l1.64-6.74L2.13 8.87l6.92-.56L12 2z"/></svg>`;
-    }
-    const gridCols = n => Math.ceil(Math.sqrt(n));
-    let lastWinnersCount = 0; // para anunciar solo nuevos
-
-    function render(state) {
-      if (!state) {
-        statusEl.textContent = 'Esperando estado…';
-        boardEl.innerHTML = '';
-        winnersBody.innerHTML = '';
-        emptyMsg.style.display = 'block';
-        return;
-      }
-      const marcadas = (state.filledCounts || []).filter(c => c >= (state.numShapes||1)).length;
-      const shapeTxt = (state.shapeType || state.shape || 'star');
-      statusEl.textContent =
-        `Estado: forma=${shapeTxt} | celdas=${state.numCells} | formas/celda=${state.numShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
-
-      // Tablero
-      const n    = state.numCells || 20;
-      const cols = gridCols(n);
-      boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(120px, 1fr))`;
+  function render(state) {
+    if (!state) {
+      statusEl.textContent = 'Esperando estado…';
       boardEl.innerHTML = '';
-
-      for (let i = 0; i < n; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-
-        const name = (state.names && state.names[i]) ? state.names[i] : `#${i+1}`;
-        const h4 = document.createElement('h4');
-        h4.textContent = name;
-
-        // Editar nombre inline (solo admin)
-        if (isAdmin) {
-          h4.title = 'Haz clic para editar. Enter o salir para guardar';
-          h4.style.cursor = 'text';
-          h4.addEventListener('click', () => {
-            h4.setAttribute('contenteditable', 'true');
-            h4.focus();
-            document.execCommand('selectAll', false, null);
-          });
-          const commit = async () => {
-            h4.removeAttribute('contenteditable');
-            const newName = h4.textContent.trim() || `#${i+1}`;
-            // Guardar solo si cambia
-            if (state.names[i] !== newName) {
-              state.names[i] = newName;
-              await call('setNames', { names: state.names });
-            }
-          };
-          h4.addEventListener('blur', commit);
-          h4.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); h4.blur(); }
-          });
-        }
-
-        cell.appendChild(h4);
-
-        const shapesWrap = document.createElement('div');
-        shapesWrap.className = 'shapes';
-        const totalShapes = state.numShapes || 2;
-        const filled = (state.filledCounts && state.filledCounts[i]) || 0;
-        const type = (state.shapeType || state.shape || 'star');
-        for (let j = 0; j < totalShapes; j++) {
-          const d = document.createElement('div');
-          d.className = `shape ${type} ${j < filled ? 'filled' : ''}`;
-          d.innerHTML = shapeSVG(type);
-          shapesWrap.appendChild(d);
-        }
-        cell.appendChild(shapesWrap);
-        boardEl.appendChild(cell);
-      }
-
-      // Ganadores + anuncio por voz
-      const winners = state.winners || [];
       winnersBody.innerHTML = '';
-      if (winners.length === 0) emptyMsg.style.display = 'block';
-      else emptyMsg.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      return;
+    }
 
-      winners.forEach((w, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${idx+1}</td><td>${(w.name || ('#'+(w.number||'-')))} — ${w.prize||'Premio'}</td>`;
-        winnersBody.appendChild(tr);
-      });
+    // Programa/ajusta el auto-next en base al estado
+    ensureAutoNext(state);
 
-      if (winners.length > lastWinnersCount) {
-        const nw = winners[winners.length - 1];
-        const num = nw?.number ?? '?';
-        const prize = nw?.prize ?? 'premio';
-        // Solo anuncia si admin (para no duplicar sonidos en espectadores)
-        if (isAdmin) speak(`Número ${num}, felicidades, ganaste ${prize}.`);
+    const marcadas = (state.filledCounts || []).filter(c => c >= (state.numShapes||1)).length;
+    const shapeTxt = (state.shapeType || state.shape || 'star');
+    statusEl.textContent =
+      `Estado: forma=${shapeTxt} | celdas=${state.numCells} | formas/celda=${state.numShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
+
+    // Si estás editando un nombre, NO redibujamos el tablero para no “sacarte” el foco
+    // (aún así actualizamos zona de ganadores y status arriba)
+    if (isEditing) {
+      // solo repintamos ganadores si cambian
+      paintWinners(state);
+      lastState = state;
+      return;
+    }
+
+    // Tablero
+    const n    = state.numCells || 20;
+    const cols = gridCols(n);
+    boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(120px, 1fr))`;
+    boardEl.innerHTML = '';
+
+    for (let i = 0; i < n; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+
+      const name = (state.names && state.names[i]) ? state.names[i] : `#${i+1}`;
+      const h4 = document.createElement('h4');
+      h4.textContent = name;
+
+      // Editar nombre inline (solo admin)
+      if (isAdmin) {
+        h4.title = 'Haz clic para editar. Enter o salir para guardar';
+        h4.style.cursor = 'text';
+        h4.addEventListener('click', () => {
+          // Marca edición y deja de redibujar hasta que guardemos
+          isEditing = true;
+          editingIndex = i;
+          h4.setAttribute('contenteditable', 'true');
+          h4.focus();
+          document.execCommand('selectAll', false, null);
+        });
+        const commit = async () => {
+          if (!isEditing || editingIndex !== i) return;
+          h4.removeAttribute('contenteditable');
+          const newName = h4.textContent.trim() || `#${i+1}`;
+          // Guardamos solo si cambió
+          if (state.names[i] !== newName) {
+            state.names[i] = newName;
+            try { await call('setNames', { names: state.names }); } catch {}
+          }
+          isEditing = false;
+          editingIndex = null;
+          // tras guardar, el poll normal redibujará
+        };
+        h4.addEventListener('blur', commit);
+        h4.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); h4.blur(); }
+        });
       }
-      lastWinnersCount = winners.length;
 
-      // También pintamos premios en el gestor, si admin
-      if (isAdmin) drawPrizes(state.prizes || []);
+      cell.appendChild(h4);
+
+      const shapesWrap = document.createElement('div');
+      shapesWrap.className = 'shapes';
+      const totalShapes = state.numShapes || 2;
+      const filled = (state.filledCounts && state.filledCounts[i]) || 0;
+      const type = (state.shapeType || state.shape || 'star');
+      for (let j = 0; j < totalShapes; j++) {
+        const d = document.createElement('div');
+        d.className = `shape ${type} ${j < filled ? 'filled' : ''}`;
+        d.innerHTML = shapeSVG(type);
+        shapesWrap.appendChild(d);
+      }
+      cell.appendChild(shapesWrap);
+      boardEl.appendChild(cell);
     }
 
-    // ====== Llamadas backend ======
-    async function call(action, payload={}) {
-      const res = await fetch('/.netlify/functions/state', {
-        method: 'POST',
-        headers: { 'content-type':'application/json' },
-        body: JSON.stringify({ room, action, ...payload })
+    paintWinners(state);
+    lastState = state;
+
+    // Si es admin, refrescamos lista de premios en el gestor
+    if (isAdmin) drawPrizes(state.prizes || []);
+  }
+
+  function paintWinners(state){
+    const winners = state.winners || [];
+    winnersBody.innerHTML = '';
+    emptyMsg.style.display = winners.length ? 'none' : 'block';
+
+    winners.forEach((w, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${idx+1}</td><td>${(w.name || ('#'+(w.number||'-')))} — ${w.prize||'Premio'}</td>`;
+      winnersBody.appendChild(tr);
+    });
+
+    // Anuncio por voz solo cuando hay uno nuevo y SOLO en admin
+    if (isAdmin && winners.length > lastWinnersCount) {
+      const nw = winners[winners.length - 1];
+      const num = nw?.number ?? '?';
+      const prize = nw?.prize ?? 'premio';
+      speak(`Número ${num}, felicidades, ganaste ${prize}.`);
+    }
+    lastWinnersCount = winners.length;
+  }
+
+  // ====== Llamadas backend ======
+  async function call(action, payload={}) {
+    const res = await fetch('/.netlify/functions/state', {
+      method: 'POST',
+      headers: { 'content-type':'application/json' },
+      body: JSON.stringify({ room, action, ...payload })
+    });
+    const data = await res.json().catch(()=>({}));
+    if (!data.ok) throw new Error(data.error||'Error');
+    return data.state;
+  }
+  async function fetchState() {
+    const url = new URL('/.netlify/functions/state', location.origin);
+    url.searchParams.set('room', room);
+    const res = await fetch(url.toString());
+    const data = await res.json().catch(()=>({}));
+    if (data && data.ok) return data.state || null;
+    return null;
+  }
+
+  // ====== Poll ======
+  async function poll() {
+    try {
+      const s = await fetchState();
+      // Si estás editando un nombre, no redibuja el tablero
+      render(s);
+    } catch {}
+  }
+  poll();
+  setInterval(poll, 1000);
+
+  // ====== Eventos admin ======
+  if (isAdmin) {
+    qs('#btnGenerate').onclick = async () => {
+      clearAutoNext();
+      const n = parseInt(qs('#numCells').value||'20',10);
+      const k = parseInt(qs('#numShapes').value||'2',10);
+      const shape = qs('#shapeType').value||'star';
+      const intervalMs = Math.max(1000, parseInt((qs('#intervalSec').value||'5'),10)*1000);
+      await call('generate', { n, k, shape, intervalMs }); poll();
+    };
+    qs('#btnReset').onclick = async () => { clearAutoNext(); await call('reset'); poll(); };
+    qs('#btnStart').onclick = async () => { await call('start'); poll(); };
+    qs('#btnStop').onclick  = async () => { clearAutoNext(); await call('stop');  poll(); };
+    qs('#btnNext').onclick  = async () => { await call('next');  poll(); };
+
+    // Nombres masivos
+    qs('#btnSaveNames').onclick = async () => {
+      const raw = (qs('#namesText').value || '').trim();
+      const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      await call('setNames', { names }); poll();
+    };
+  }
+
+  // ====== Gestor de premios ======
+  const prizesList  = qs('#prizesList');
+  const newPrizeTxt = qs('#newPrizeText');
+  function drawPrizes(prizes) {
+    if (!prizesList) return;
+    prizesList.innerHTML = '';
+    prizes.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.className = 'prize-row';
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.value = p;
+      const del = document.createElement('button');
+      del.textContent = 'Eliminar'; del.className = 'bad';
+      row.appendChild(inp); row.appendChild(del);
+      prizesList.appendChild(row);
+
+      inp.addEventListener('change', () => {
+        // Solo cambia en UI; al pulsar "Guardar lista" se envía todo
       });
-      const data = await res.json().catch(()=>({}));
-      if (!data.ok) throw new Error(data.error||'Error');
-      return data.state;
-    }
-    async function fetchState() {
-      const url = new URL('/.netlify/functions/state', location.origin);
-      url.searchParams.set('room', room);
-      const res = await fetch(url.toString());
-      const data = await res.json().catch(()=>({}));
-      if (data && data.ok) return data.state || null;
-      return null;
-    }
-
-    // ====== Poll ======
-    async function poll() {
-      try { render(await fetchState()); } catch {}
-    }
+      del.addEventListener('click', async () => {
+        await call('removePrize', { index: idx });
+        poll();
+      });
+    });
+  }
+  qs('#btnAddPrize')?.addEventListener('click', async () => {
+    const name = (newPrizeTxt.value || '').trim();
+    if (!name) return;
+    await call('addPrize', { prize: name });
+    newPrizeTxt.value = '';
     poll();
-    setInterval(poll, 1000);
+  });
+  qs('#btnSavePrizes')?.addEventListener('click', async () => {
+    const rows = prizesList.querySelectorAll('input[type="text"]');
+    const prizes = Array.from(rows).map(i => i.value.trim()).filter(Boolean);
+    await call('setPrizes', { prizes });
+    poll();
+  });
+</script>
 
-    // ====== Eventos admin básicos ======
-    if (isAdmin) {
-      qs('#btnGenerate').onclick = async () => {
-        const n = parseInt(qs('#numCells').value||'20',10);
-        const k = parseInt(qs('#numShapes').value||'2',10);
-        const shape = qs('#shapeType').value||'star';
-        const intervalMs = Math.max(1000, parseInt((qs('#intervalSec').value||'5'),10)*1000);
-        await call('generate', { n, k, shape, intervalMs }); poll();
-      };
-      qs('#btnReset').onclick = async () => { await call('reset'); poll(); };
-      qs('#btnStart').onclick = async () => { await call('start'); poll(); };
-      qs('#btnStop').onclick  = async () => { await call('stop');  poll(); };
-      qs('#btnNext').onclick  = async () => { await call('next');  poll(); };
-
-      // Nombres masivos
-      qs('#btnSaveNames').onclick = async () => {
-        const raw = (qs('#namesText').value || '').trim();
-        const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
-        await call('setNames', { names }); poll();
-      };
-    }
-
-    // ====== Gestor de premios ======
-    const prizesList  = qs('#prizesList');
-    const newPrizeTxt = qs('#newPrizeText');
-
-    function drawPrizes(prizes) {
-      prizesList.innerHTML = '';
-      prizes.forEach((p, idx) => {
-        const row = document.createElement('div');
-        row.className = 'prize-row';
-        const inp = document.createElement('input');
-        inp.type = 'text'; inp.value = p;
-        const del = document.createElement('button');
-        del.textContent = 'Eliminar'; del.className = 'bad';
-        row.appendChild(inp); row.appendChild(del);
-        prizesList.appendChild(row);
-
-        inp.addEventListener('change', () => {
-          // Cambiar nombre en memoria y luego guardar con setPrizes
-          currentPrizes[idx] = inp.value.trim() || `Premio ${idx+1}`;
-        });
-        del.addEventListener('click', async () => {
-          await call('removePrize', { index: idx });
-          poll();
-        });
-      });
-    }
-
-    let currentPrizes = [];
-    qs('#btnAddPrize')?.addEventListener('click', async () => {
-      const name = (newPrizeTxt.value || '').trim();
-      if (!name) return;
-      await call('addPrize', { prize: name });
-      newPrizeTxt.value = '';
-      poll();
-    });
-    qs('#btnSavePrizes')?.addEventListener('click', async () => {
-      // Lee la lista visible y guarda toda la lista
-      const rows = prizesList.querySelectorAll('input[type="text"]');
-      const prizes = Array.from(rows).map(i => i.value.trim()).filter(Boolean);
-      await call('setPrizes', { prizes });
-      poll();
-    });
-  </script>
-</body>
-</html>
 
 
