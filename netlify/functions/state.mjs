@@ -68,24 +68,24 @@ async function saveState(room, state) {
 export default async (request) => {
   try {
     if (request.method === 'GET') {
-      const { searchParams } = new URL(request.url);
-      const room = (searchParams.get('room') || 'demo').trim() || 'demo';
-      let state = await getState(room);
+  const { searchParams } = new URL(request.url, "http://localhost"); 
+  const room = (searchParams.get('room') || 'demo').trim();
+  let state = await getState(room);
 
-      // ⚠️ Auto-crea si no existe para evitar "Esperando estado"
-      if (!state) {
-        state = newState(20, 2, 'star');
-        await saveState(room, state);
-      }
+  // Auto-crea si no existe
+  if (!state) {
+    state = newState(20, 2, 'star');
+    await saveState(room, state);
+  }
 
-      return new Response(JSON.stringify({ ok: true, state: expose(state) }), {
-        status: 200, headers: { 'content-type': 'application/json' }
-      });
-    }
-
+  return new Response(JSON.stringify({ ok: true, state }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' }
+  });
+}
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      const room = (body.room || 'demo').trim() || 'demo';
+      const room = (body.room || 'demo').trim();
       const action = body.action;
       let state = await getState(room);
       if (!state) { state = newState(); }
