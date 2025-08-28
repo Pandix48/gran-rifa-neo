@@ -34,19 +34,14 @@ function set(room, state) { ROOMS.set(room, state); }
 export default async (request) => {
   try {
     if (request.method === 'GET') {
-      const { searchParams } = new URL(request.url, 'http://localhost');
-      const room = (searchParams.get('room') || 'demo').trim() || 'demo';
+  const { searchParams } = new URL(request.url, 'http://localhost');
+  const room = (searchParams.get('room') || 'demo').trim() || 'demo';
 
-      let state = get(room);
-      if (!state) {
-        state = newState(20, 2, 'star');
-        set(room, state);
-      }
-
-      return new Response(JSON.stringify({ ok: true, state }), {
-        status: 200, headers: { 'content-type': 'application/json' }
-      });
-    }
+  const state = get(room) || null; // ✅ si no hay, devuelve null
+  return new Response(JSON.stringify({ ok: true, state }), {
+    status: 200, headers: { 'content-type': 'application/json' }
+  });
+}
 
     if (request.method === 'POST') {
       const body = await request.json().catch(() => ({}));
