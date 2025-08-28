@@ -332,96 +332,102 @@
     lastWinnersCount = winners.length;
   }
 
-  function render(state) {
-    try {
-      if (!statusEl || !boardEl) return;
-      if (!state) {
-        statusEl.textContent = 'Esperando estado…';
-        boardEl.innerHTML = '';
-        if (winnersBody) winnersBody.innerHTML = '';
-        if (emptyMsg) emptyMsg.style.display = 'block';
-        return;
-      }
-
-      // Arranca/ajusta el auto-next según el estado
-      ensureAutoNext(state);
-
-      const marcadas = (state.filledCounts || []).filter(c => c >= (state.numShapes||1)).length;
-      const shapeTxt = (state.shapeType || state.shape || 'star');
-      statusEl.textContent =
-        `Estado: forma=${shapeTxt} | celdas=${state.numCells} | formas/celda=${state.numShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
-
-      if (isEditing) {  // no repintar tablero mientras editas
-        paintWinners(state);
-        lastState = state;
-        return;
-      }
-
-      const n    = state.numCells || 20;
-      const cols = gridCols(n);
-      boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(120px, 1fr))`;
+function render(state) {
+  try {
+    if (!statusEl || !boardEl) return;
+    if (!state) {
+      statusEl.textContent = 'Esperando estado…';
       boardEl.innerHTML = '';
+      if (winnersBody) winnersBody.innerHTML = '';
+      if (emptyMsg) emptyMsg.style.display = 'block';
+      return;
+    }
 
-      for (let i = 0; i < n; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
+    // Arranca/ajusta el auto-next según el estado
+    ensureAutoNext(state);
 
-        const name = (state.names && state.names[i]) ? state.names[i] : `#${i+1}`;
-        const h4 = document.createElement('h4');
-        h4.textContent = name;
+    // ✅ Cálculos “seguros”
+    const totalShapes = Number.isFinite(state.numShapes) ? state.numShapes : 2;
+    const n           = Number.isFinite(state.numCells)  ? state.numCells  : 20;
+    const shapeTxt    = (state.shapeType || state.shape || 'star');
+    const marcadas    = (state.filledCounts || [])
+      .filter(c => Number.isFinite(c) && c >= totalShapes).length;
 
-        if (isAdmin) {
-          h4.title = 'Haz clic para editar. Enter o blur para guardar';
-          h4.style.cursor = 'text';
-          h4.addEventListener('click', () => {
-            isEditing = true;
-            editingIndex = i;
-            h4.setAttribute('contenteditable', 'true');
-            h4.focus();
-            try { document.execCommand('selectAll', false, null); } catch {}
-          });
-          const commit = async () => {
-            if (!isEditing || editingIndex !== i) return;
-            h4.removeAttribute('contenteditable');
-            const newName = h4.textContent.trim() || `#${i+1}`;
-            if (state.names[i] !== newName) {
-              state.names[i] = newName;
-              try { await call('setNames', { names: state.names }); } catch {}
-            }
-            isEditing = false;
-            editingIndex = null;
-          };
-          h4.addEventListener('blur', commit);
-          h4.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); h4.blur(); }
-          });
-        }
+    statusEl.textContent =
+      `Estado: forma=${shapeTxt} | celdas=${n} | formas/celda=${totalShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
 
-        cell.appendChild(h4);
-
-        const shapesWrap = document.createElement('div');
-        shapesWrap.className = 'shapes';
-        const totalShapes = state.numShapes || 2;
-        const filled = (state.filledCounts && state.filledCounts[i]) || 0;
-        const type = (state.shapeType || state.shape || 'star');
-        for (let j = 0; j < totalShapes; j++) {
-          const d = document.createElement('div');
-          d.className = `shape ${type} ${j < filled ? 'filled' : ''}`;
-          d.innerHTML = shapeSVG(type);
-          shapesWrap.appendChild(d);
-        }
-        cell.appendChild(shapesWrap);
-        boardEl.appendChild(cell);
-      }
-
+    if (isEditing) {  // no repintar tablero mientras editas
       paintWinners(state);
       lastState = state;
-
-      if (isAdmin && prizesList) drawPrizes(state.prizes || []);
-    } catch (e) {
-      console.error(e);
+      return;
     }
+
+    const cols = gridCols(n);
+    boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(120px, 1fr))`;
+    boardEl.innerHTML = '';
+
+    for (let i = 0; i < n; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+
+      const name = (state.names && state.names[i]) ? state.names[i] : `#${i+1}`;
+      const h4 = document.createElement('h4');
+      h4.textContent = name;
+
+      if (isAdmin) {
+        h4.title = 'Haz clic para editar. Enter o blur para guardar';
+        h4.style.cursor = 'text';
+        h4.addEventListener('click', () => {
+          isEditing = true;
+          editingIndex = i;
+          h4.setAttribute('contenteditable', 'true');
+          h4.focus();
+          try { document.execCommand('selectAll', false, null); } catch {}
+        });
+        const commit = async () => {
+          if (!isEditing || editingIndex !== i) return;
+          h4.removeAttribute('contenteditable');
+          const newName = h4.textContent.trim() || `#${i+1}`;
+          if (state.names[i] !== newName) {
+            state.names[i] = newName;
+            try { await call('setNames', { names: state.names }); } catch {}
+          }
+          isEditing = false;
+          editingIndex = null;
+        };
+        h4.addEventListener('blur', commit);
+        h4.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); h4.blur(); }
+        });
+      }
+
+      cell.appendChild(h4);
+
+      const shapesWrap = document.createElement('div');
+      shapesWrap.className = 'shapes';
+
+      const type   = (state.shapeType || state.shape || 'star');
+      const filled = Number.isFinite(state.filledCounts?.[i]) ? state.filledCounts[i] : 0;
+
+      for (let j = 0; j < totalShapes; j++) {
+        const d = document.createElement('div');
+        d.className = `shape ${type} ${j < filled ? 'filled' : ''}`;
+        d.innerHTML = shapeSVG(type);
+        shapesWrap.appendChild(d);
+      }
+      cell.appendChild(shapesWrap);
+      boardEl.appendChild(cell);
+    }
+
+    paintWinners(state);
+    lastState = state;
+
+    if (isAdmin && prizesList) drawPrizes(state.prizes || []);
+  } catch (e) {
+    console.error(e);
   }
+}
+
 
   // ====== backend ======
   async function call(action, payload={}) {
@@ -446,71 +452,100 @@
   }
 
   // ====== poll ======
-  async function poll() {
-    try { render(await fetchState()); } catch {}
+  let didAutoInit = false;
+
+async function poll() {
+  try {
+    const s = await fetchState();
+
+    // Si no hay estado y eres admin, créalo automáticamente solo una vez
+    if (!s && isAdmin && !didAutoInit) {
+      didAutoInit = true;
+      const n  = parseInt(document.querySelector('#numCells')?.value  || '20', 10);
+      const k  = parseInt(document.querySelector('#numShapes')?.value || '2', 10);
+      const sh = (document.querySelector('#shapeType')?.value || 'star');
+      const intervalMs = Math.max(1000, parseInt((document.querySelector('#intervalSec')?.value || '5'),10) * 1000);
+
+      await call('generate', { n, k, shape: sh, intervalMs });
+      return; // No renderices todavía, espera al próximo poll
+    }
+
+    // Renderiza normalmente si ya hay estado
+    render(s);
+
+  } catch(e) {
+    console.error("Error en poll:", e);
   }
-  poll();
-  setInterval(poll, 1000);
+}
+
+poll();
+setInterval(poll, 1000);
 
   // ====== eventos admin ======
-  if (isAdmin) {
-    btnGenerate?.addEventListener('click', async () => {
-      clearAutoNext(); // por si había uno en marcha
-      const n  = parseInt(numCellsEl?.value  || '20',10);
-      const k  = parseInt(numShapesEl?.value || '2',10);
-      const sh = (shapeTypeEl?.value || 'star');
-      const intervalMs = Math.max(
-        1000,
-        parseInt((intervalSecEl?.value || '5'),10) * 1000
-      );
-      await call('generate', { n, k, shape: sh, intervalMs }); // guarda intervalMs
-      poll();
-    });
+  // ====== eventos admin ======
+if (isAdmin) {
+  btnGenerate?.addEventListener('click', async () => {
+    clearAutoNext(); // por si había uno en marcha
+    const n  = parseInt(numCellsEl?.value  || '20',10);
+    const k  = parseInt(numShapesEl?.value || '2',10);
+    const sh = (shapeTypeEl?.value || 'star');
+    const intervalMs = Math.max(
+      1000,
+      parseInt((intervalSecEl?.value || '5'),10) * 1000
+    );
+    await call('generate', { n, k, shape: sh, intervalMs }); // guarda intervalMs
+    poll();
+  });
 
-    btnReset?.addEventListener('click', async () => {
-      clearAutoNext();
-      await call('reset');
-      poll();
-    });
+  btnReset?.addEventListener('click', async () => {
+    clearAutoNext();
+    await call('reset');
+    poll();
+  });
 
-    btnStart?.addEventListener('click', async () => {
-      await call('start'); // running=true
-      // ensureAutoNext arrancará el timer en el siguiente poll
-      poll();
-    });
+  btnStart?.addEventListener('click', async () => {
+    await call('start'); // running=true
+    // ensureAutoNext arrancará el timer en el siguiente poll
+    poll();
+  });
 
-    btnStop ?.addEventListener('click', async () => {
-      clearAutoNext();
-      await call('stop');
-      poll();
-    });
+  // 🚩 corregido: sin espacios antes de ?.
+  btnStop?.addEventListener('click', async () => {
+    clearAutoNext();
+    await call('stop');
+    poll();
+  });
 
-    btnNext ?.addEventListener('click', async () => {
-      await call('next');
-      poll();
-    });
+  // 🚩 corregido: sin espacios antes de ?.
+  btnNext?.addEventListener('click', async () => {
+    await call('next');
+    poll();
+  });
 
-    btnSaveNames?.addEventListener('click', async () => {
-      const raw = (namesText?.value || '').trim();
-      const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
-      await call('setNames', { names }); poll();
-    });
+  btnSaveNames?.addEventListener('click', async () => {
+    const raw = (namesText?.value || '').trim();
+    const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    await call('setNames', { names });
+    poll();
+  });
 
-    btnAddPrize?.addEventListener('click', async () => {
-      const name = (newPrizeTxt?.value || '').trim();
-      if (!name) return;
-      await call('addPrize', { prize: name });
-      if (newPrizeTxt) newPrizeTxt.value = '';
-      poll();
-    });
-    btnSavePrizes?.addEventListener('click', async () => {
-      if (!prizesList) return;
-      const rows = prizesList.querySelectorAll('input[type="text"]');
-      const prizes = Array.from(rows).map(i => i.value.trim()).filter(Boolean);
-      await call('setPrizes', { prizes });
-      poll();
-    });
-  }
+  btnAddPrize?.addEventListener('click', async () => {
+    const name = (newPrizeTxt?.value || '').trim();
+    if (!name) return;
+    await call('addPrize', { prize: name });
+    if (newPrizeTxt) newPrizeTxt.value = '';
+    poll();
+  });
+
+  btnSavePrizes?.addEventListener('click', async () => {
+    if (!prizesList) return;
+    const rows = prizesList.querySelectorAll('input[type="text"]');
+    const prizes = Array.from(rows).map(i => i.value.trim()).filter(Boolean);
+    await call('setPrizes', { prizes });
+    poll();
+  });
+}
+
 
   // ====== gestor de premios (dibujo) ======
   function drawPrizes(prizes) {
