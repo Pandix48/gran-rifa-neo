@@ -1,7 +1,9 @@
-import { neon } from '@neondatabase/serverless'
+// netlify/functions/state.js
+import { neon } from '@neondatabase/serverless';
 
-// usa la URL que te inyecta la extensión de Netlify
-const sql = neon(process.env.NETLIFY_DATABASE_URL)
+// Usa la URL que te inyecta Netlify (o crea DATABASE_URL alias)
+const sql = neon(process.env.NETLIFY_DATABASE_URL);
+
 async function ensureTable() {
   await sql`CREATE TABLE IF NOT EXISTS states (
     room TEXT PRIMARY KEY,
@@ -16,11 +18,12 @@ function newState(n=20,k=2,shape='star') {
   k = clamp(Math.floor(k), 1, 20);
   const allowed = ['star','circle','diamond'];
   if (!allowed.includes(shape)) shape='star';
-  return {
+  // Guardamos shapeType internamente, pero también exponemos "shape" para el front
+  const base = {
     running:false,
     numCells:n,
     numShapes:k,
-    shapeType: shape,
+    shapeType: shape,           // interno
     intervalMs:5000,
     availableNumbers: Array.from({length:n}, (_,i)=>i+1),
     names: Array.from({length:n}, (_,i)=>`#${i+1}`),
@@ -28,18 +31,30 @@ function newState(n=20,k=2,shape='star') {
     prizes: [],
     winners: []
   };
+  return { ...base, shape: base.shapeType }; // compatibilidad con el front
+}
+
+function expose(state) {
+  // Siempre devuelve también "shape" además de "shapeType"
+  if (!state) return state;
+  if (!state.shape) state.shape = state.shapeType || 'star';
+  return state;
 }
 
 async function getState(room){
   await ensureTable();
   const rows = await sql`SELECT state FROM states WHERE room = ${room}`;
-  if (rows.length) return rows[0].state;
+  if (rows.length) return expose(rows[0].state);
   return null;
 }
 
 async function saveState(room, state){
   await ensureTable();
-  await sql`INSERT INTO states (room, state) VALUES (${room}, ${state}) 
+  // Aseguramos shape/shapeType consistentes al guardar
+  const s = { ...state };
+  if (!s.shapeType && s.shape) s.shapeType = s.shape;
+  if (!s.shape && s.shapeType) s.shape = s.shapeType;
+  await sql`INSERT INTO states (room, state) VALUES (${room}, ${s}) 
             ON CONFLICT (room) DO UPDATE SET state = EXCLUDED.state;`;
 }
 
@@ -49,7 +64,9 @@ export default async (request, context) => {
       const { searchParams } = new URL(request.url);
       const room = (searchParams.get('room') || 'demo').trim() || 'demo';
       const state = await getState(room);
-      return new Response(JSON.stringify({ ok:true, state }), { status:200, headers: { 'content-type':'application/json' } });
+      return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
+        status:200, headers: { 'content-type':'application/json' }
+      });
     }
 
     if (request.method === 'POST') {
@@ -70,7 +87,7 @@ export default async (request, context) => {
         }
         case 'reset': {
           if (!state) state = newState();
-          const base = newState(state.numCells, state.numShapes, state.shapeType);
+          const base = newState(state.numCells, state.numShapes, state.shapeType || state.shape || 'star');
           base.prizes = state.prizes || [];
           state = base;
           await saveState(room, state);
@@ -122,14 +139,22 @@ export default async (request, context) => {
           break;
         }
         default:
-          return new Response(JSON.stringify({ ok:false, error:'Acción no soportada' }), { status:400, headers: { 'content-type':'application/json' } });
+          return new Response(JSON.stringify({ ok:false, error:'Acción no soportada' }), {
+            status:400, headers: { 'content-type':'application/json' }
+          });
       }
 
-      return new Response(JSON.stringify({ ok:true, state }), { status:200, headers: { 'content-type':'application/json' } });
+      return new Response(JSON.stringify({ ok:true, state: expose(state) }), {
+        status:200, headers: { 'content-type':'application/json' }
+      });
     }
 
-    return new Response(JSON.stringify({ ok:false, error:'Método no soportado' }), { status:405, headers: { 'content-type':'application/json' } });
+    return new Response(JSON.stringify({ ok:false, error:'Método no soportado' }), {
+      status:405, headers: { 'content-type':'application/json' }
+    });
   }catch(e){
-    return new Response(JSON.stringify({ ok:false, error:String(e) }), { status:500, headers: { 'content-type':'application/json' } });
+    return new Response(JSON.stringify({ ok:false, error:String(e) }), {
+      status:500, headers: { 'content-type':'application/json' }
+    });
   }
 }
