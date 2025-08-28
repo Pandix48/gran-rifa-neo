@@ -1,576 +1,355 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Gran Rifa — Netlify</title>
-<style>
-  :root{
-    --bg:#f6f7fb;
-    --panel:#fff;
-    --ink:#111827;
-    --muted:#6b7280;
-    --accent:#2563eb;
-    --good:#16a34a;
-    --bad:#dc2626;
-    --border:#e5e7eb;
-    --star:#fbbf24;
-  }
-  *{box-sizing:border-box}
-  body{
-    margin:0;
-    font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,Apple Color Emoji,Segoe UI Emoji;
-    color:var(--ink);
-    background:var(--bg);
-  }
-  header{
-    padding:12px 16px;
-    border-bottom:1px solid var(--border);
-    background:#fff;
-    position:sticky; top:0; z-index:5;
-  }
-  .wrap{max-width:1200px;margin:16px auto;padding:0 16px}
-  h1{font-size:16px;margin:0}
-  #status{color:var(--muted); font-size:13px}
+  <meta charset="UTF-8">
+  <title>Gran Rifa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; }
+    header { background:#fff; border-bottom:1px solid #e5e7eb; padding:12px 16px; position:sticky; top:0; z-index:5; }
+    h1 { margin:0; font-size:16px; }
+    #status { color:#6b7280; font-size:13px; }
+    .wrap { max-width:1100px; margin:16px auto; padding:0 16px; }
+    .panel { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; margin-bottom:12px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    input,select,button { font:inherit; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+    input[type="number"]{ width:90px; }
+    button { cursor:pointer; }
+    .primary{ background:#2563eb; color:#fff; border-color:transparent; }
+    .good{ background:#16a34a; color:#fff; border-color:transparent; }
+    .bad{ background:#dc2626; color:#fff; border-color:transparent; }
 
-  /* Paneles */
-  .panel{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:16px;
-    margin-bottom:16px;
-  }
-  .panel h2{
-    margin:0 0 8px 0; font-size:18px;
-  }
-  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
-  .row > *{margin:4px 0}
-  label{font-size:12px;color:var(--muted)}
-  input, select, textarea, button{
-    font:inherit; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#fff;
-  }
-  input[type="number"]{width:90px}
-  textarea{width:100%; min-height:120px; resize:vertical}
-  button{cursor:pointer}
-  .primary{background:var(--accent); color:#fff; border-color:transparent}
-  .good{background:var(--good); color:#fff; border-color:transparent}
-  .bad{background:var(--bad); color:#fff; border-color:transparent}
-
-  /* tablero */
-  #board{
-    display:grid; gap:10px;
-    grid-template-columns: repeat(5, minmax(120px,1fr));
-  }
-  .cell{
-    background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;
-  }
-  .cell h4{
-    margin:0 0 6px 0; font-size:13px; color:var(--muted);
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  }
-  .shapes{display:flex; gap:6px; flex-wrap:wrap}
-  .shape svg{width:18px;height:18px; fill:#e5e7eb}
-  .shape.filled svg{fill:var(--star)}
-
-  /* tabla ganadores */
-  table{width:100%;border-collapse:collapse}
-  td, th{padding:8px;border-top:1px solid var(--border); font-size:14px}
-  th{text-align:left;color:var(--muted)}
-  .muted{color:var(--muted);font-size:13px}
-  .prize-row{display:flex; gap:8px; align-items:center; margin-bottom:8px}
-  .prize-row input{flex:1}
-  .section-title{font-weight:600; margin:10px 0 6px}
-
-  /* controles ocultos si no eres admin */
-  #controls{display:none}
-</style>
+    table { margin: 12px auto; border-collapse: collapse; width:100%; max-width:1000px; }
+    td { border: 1px solid #e5e7eb; padding: 10px; min-width: 120px; text-align: center; background:#fff; border-radius:8px; }
+    .cell-header { font-weight: bold; margin-bottom: 5px; color:#374151; font-size:13px; }
+    .name-input { width: 95%; padding: 6px 8px; margin-top: 5px; border:1px solid #e5e7eb; border-radius:8px; }
+    .shapes { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top:6px; }
+    .shape { width: 20px; height: 20px; opacity: 0.25; }
+    .shape.filled { opacity: 1; }
+    .star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: #fbbf24; }
+    .circle { border-radius: 50%; background: #60a5fa; }
+    .diamond { background: #a78bfa; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+    .muted { color:#6b7280; font-size:13px; }
+    .winner { font-size: 1.2em; color: #16a34a; margin-top: 8px; text-align:center; }
+    #controls{ display:none; }
+    .prize { margin: 6px 0; }
+    .remove-btn { margin-left: 10px; color: #dc2626; cursor: pointer; }
+  </style>
 </head>
 <body>
+  <header>
+    <div class="wrap">
+      <h1>Gran Rifa</h1>
+      <div id="status" class="muted">Cargando…</div>
+    </div>
+  </header>
 
-<header>
   <div class="wrap">
-    <h1>Gran Rifa — Netlify</h1>
-    <div id="status" class="muted">Cargando…</div>
-  </div>
-</header>
 
-<div class="wrap">
-
-  <!-- CONTROLES ADMIN -->
-  <section id="controls" class="panel">
-    <h2>Controles (admin)</h2>
-
-    <div class="row">
-      <div>
-        <label for="numCells">Celdas</label><br/>
-        <input id="numCells" type="number" value="20" min="1" />
-      </div>
-      <div>
-        <label for="numShapes">Formas / celda</label><br/>
-        <input id="numShapes" type="number" value="2" min="1" />
-      </div>
-      <div>
-        <label for="shapeType">Forma</label><br/>
-        <select id="shapeType">
-          <option value="star">Estrella</option>
-          <option value="circle">Círculo</option>
-          <option value="diamond">Diamante</option>
-        </select>
-      </div>
-      <div>
-        <label for="intervalSec">Intervalo (seg)</label><br/>
-        <input id="intervalSec" type="number" value="5" min="1" />
-      </div>
-    </div>
-
-    <div class="row">
-      <button id="btnGenerate" class="primary">Generar tablero</button>
-      <button id="btnReset">Reset</button>
-      <button id="btnStart" class="good">Start</button>
-      <button id="btnStop" class="bad">Stop</button>
-      <button id="btnNext">Next</button>
-    </div>
-
-    <div style="margin-top:12px">
-      <label for="namesText">Nombres (uno por línea)</label>
-      <textarea id="namesText" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
-      <button id="btnSaveNames" class="primary">Guardar nombres</button>
-    </div>
-
-    <div style="margin-top:16px">
-      <div class="section-title">Premios</div>
-      <div class="prize-row">
-        <input id="newPrizeText" type="text" placeholder="Nombre del premio…"/>
-        <button id="btnAddPrize" class="primary">Añadir premio</button>
-      </div>
-      <div id="prizesList"></div>
-      <button id="btnSavePrizes">Guardar lista de premios</button>
-    </div>
-
-    <div style="margin-top:16px">
-      <div class="section-title">Voz</div>
+    <!-- Controles (solo admin con ?admin=1) -->
+    <section id="controls" class="panel">
       <div class="row">
-        <div>
-          <label>Voz</label><br/>
-          <select id="voiceSelect" style="min-width:260px"></select>
+        <div> Número de celdas: <input type="number" id="numCells" value="20" min="1"></div>
+        <div> Formas por celda: <input type="number" id="numShapes" value="2" min="1"></div>
+        <div> Tipo de forma:
+          <select id="shapeType">
+            <option value="star">⭐ Estrella</option>
+            <option value="circle">⚪ Círculo</option>
+            <option value="heart">❤️ Corazón</option><!-- se mapeará a diamond -->
+            <option value="diamond">💎 Diamante</option>
+          </select>
         </div>
-        <div>
-          <label>Volumen</label><br/>
-          <input id="volRange" type="range" min="0" max="1" step="0.05" value="1"/>
-        </div>
-        <div>
-          <label>Velocidad</label><br/>
-          <input id="rateRange" type="range" min="0.5" max="2" step="0.05" value="1"/>
-        </div>
-        <button id="btnTestVoice">Probar voz</button>
+        <div> Intervalo (segundos): <input type="number" id="interval" value="5" min="1"></div>
       </div>
-    </div>
-  </section>
+      <div class="row" style="margin-top:8px">
+        <button id="btnGenerate" class="primary">Generar</button>
+        <button id="btnReset">Reset</button>
+        <button id="btnStart" class="good">Iniciar</button>
+        <button id="btnStop" class="bad">Detener</button>
+        <button id="btnNext">Next</button>
+      </div>
+    </section>
 
-  <!-- TABLERO -->
-  <section class="panel">
-    <div id="board"></div>
-  </section>
+    <section class="panel">
+      <div id="prizes"></div>
+      <button id="btnAddPrize" class="primary">Añadir Premio</button>
+      <div class="winner" id="winner"></div>
+    </section>
 
-  <!-- GANADORES -->
-  <section class="panel">
-    <h2>Resumen</h2>
-    <div id="emptyMsg" class="muted">Sin ganador aún</div>
-    <table>
-      <thead><tr><th>#</th><th>Ganador</th></tr></thead>
-      <tbody id="winnersBody"></tbody>
-    </table>
-  </section>
+    <section class="panel">
+      <table id="raffleTable"></table>
+      <div id="emptyMsg" class="muted" style="text-align:center; margin-top:6px">Sin datos todavía…</div>
+    </section>
+  </div>
 
-</div>
+  <script>
+    // ====== Básicos / entorno ======
+    const qs = (s,r=document)=>r.querySelector(s);
+    const statusEl = qs('#status');
+    const tableEl  = qs('#raffleTable');
+    const emptyMsg = qs('#emptyMsg');
+    const prizesDiv= qs('#prizes');
+    const winnerEl = qs('#winner');
 
-<script>
-  // ====== helpers y nodos ======
-  const qs = (s, r=document) => r.querySelector(s);
+    const urlp     = new URLSearchParams(location.search);
+    const room     = (urlp.get('room') || 'demo').trim();
+    const isAdmin  = urlp.get('admin') === '1';
+    if (isAdmin) qs('#controls').style.display = 'block';
 
-  const statusEl    = qs('#status');
-  const boardEl     = qs('#board');
-  const winnersBody = qs('#winnersBody');
-  const emptyMsg    = qs('#emptyMsg');
+    const numCellsEl = qs('#numCells');
+    const numShapesEl= qs('#numShapes');
+    const shapeTypeEl= qs('#shapeType');
+    const intervalEl = qs('#interval');
 
-  const urlp    = new URLSearchParams(location.search);
-  const room    = (urlp.get('room') || 'demo').trim();
-  const isAdmin = urlp.get('admin') === '1';
+    const btnGenerate= qs('#btnGenerate');
+    const btnReset   = qs('#btnReset');
+    const btnStart   = qs('#btnStart');
+    const btnStop    = qs('#btnStop');
+    const btnNext    = qs('#btnNext');
+    const btnAddPrize= qs('#btnAddPrize');
 
-  const controlsEl   = qs('#controls');
-  if (isAdmin && controlsEl) controlsEl.style.display = 'block';
+    // ====== Voz ======
+    function speak(text){
+      try{
+        if (!('speechSynthesis' in window)) return;
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'es-ES';
+        speechSynthesis.speak(u);
+      }catch{}
+    }
 
-  const numCellsEl    = qs('#numCells');
-  const numShapesEl   = qs('#numShapes');
-  const shapeTypeEl   = qs('#shapeType');
-  const intervalSecEl = qs('#intervalSec');
-
-  const btnGenerate  = qs('#btnGenerate');
-  const btnReset     = qs('#btnReset');
-  const btnStart     = qs('#btnStart');
-  const btnStop      = qs('#btnStop');
-  const btnNext      = qs('#btnNext');
-
-  const namesText    = qs('#namesText');
-  const btnSaveNames = qs('#btnSaveNames');
-
-  const prizesList   = qs('#prizesList');
-  const newPrizeTxt  = qs('#newPrizeText');
-  const btnAddPrize  = qs('#btnAddPrize');
-  const btnSavePrizes= qs('#btnSavePrizes');
-
-  const voiceSelect  = qs('#voiceSelect');
-  const volRange     = qs('#volRange');
-  const rateRange    = qs('#rateRange');
-  const btnTestVoice = qs('#btnTestVoice');
-
-  // ====== voz segura ======
-  const speak = (text) => {
-    try {
-      if (!('speechSynthesis' in window)) return;
-      const u = new SpeechSynthesisUtterance(text);
-      if (volRange)  u.volume = parseFloat(volRange.value || '1');
-      if (rateRange) u.rate   = parseFloat(rateRange.value || '1');
-      if (voiceSelect) {
-        const id = voiceSelect.value;
-        const voices = speechSynthesis.getVoices();
-        const v = voices.find(v => v.voiceURI === id || v.name === id);
-        if (v) u.voice = v;
-      }
-      speechSynthesis.speak(u);
-    } catch {}
-  };
-
-  function populateVoices() {
-    try {
-      if (!('speechSynthesis' in window) || !voiceSelect) return;
-      const voices = speechSynthesis.getVoices();
-      voiceSelect.innerHTML = '';
-      voices.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v.voiceURI || v.name;
-        opt.textContent = `${v.name} (${v.lang})`;
-        voiceSelect.appendChild(opt);
+    // ====== Backend ======
+    async function call(action, payload={}){
+      const res = await fetch('/.netlify/functions/state', {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({ room, action, ...payload })
       });
-    } catch {}
-  }
-  if ('speechSynthesis' in window) {
-    try {
-      speechSynthesis.onvoiceschanged = populateVoices;
-      populateVoices();
-      btnTestVoice?.addEventListener('click', () => speak('Esta es una prueba de voz.'));
-    } catch {}
-  }
-
-  // ====== dibujo ======
-  function shapeSVG(type) {
-    if (type === 'circle')  return `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>`;
-    if (type === 'diamond') return `<svg viewBox="0 0 24 24"><path d="M12 2 L22 12 L12 22 L2 12 Z"/></svg>`;
-    return `<svg viewBox="0 0 24 24"><path d="M12 2l2.95 6.31 6.92.56-5.26 4.48 1.64 6.74L12 16.9 5.75 20.1l1.64-6.74L2.13 8.87l6.92-.56L12 2z"/></svg>`;
-  }
-  const gridCols = n => Math.ceil(Math.sqrt(n));
-
-  let isEditing = false;
-  let editingIndex = null;
-  let lastState = null;
-  let lastWinnersCount = 0;
-
-  // ====== Auto-Next (correcto) ======
-  let autoNextTimer = null;
-  let autoNextEvery = null;
-
-  function clearAutoNext(){
-    if (autoNextTimer) {
-      clearInterval(autoNextTimer);
-      autoNextTimer = null;
-    }
-    autoNextEvery = null;
-  }
-
-  async function ensureAutoNext(state){
-    if (!isAdmin) { clearAutoNext(); return; }
-    if (!state?.running) { clearAutoNext(); return; }
-
-    const ms = Math.max(1000, Number(state?.intervalMs) || 5000);
-
-    if (autoNextEvery !== ms) {
-      clearAutoNext();
-      autoNextEvery = ms;
-
-      autoNextTimer = setInterval(async () => {
-        try {
-          const s = await call('next'); // avanza una marca
-          if (!s || (s.availableNumbers || []).length === 0) {
-            clearAutoNext();
-          }
-        } catch(e) {
-          console.warn('auto-next error:', e);
-        }
-      }, ms);
-    }
-  }
-
-  function paintWinners(state){
-    if (!winnersBody || !emptyMsg) return;
-    const winners = state.winners || [];
-    winnersBody.innerHTML = '';
-    emptyMsg.style.display = winners.length ? 'none' : 'block';
-
-    winners.forEach((w, idx) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${idx+1}</td><td>${(w.name || ('#'+(w.number||'-')))} — ${w.prize||'Premio'}</td>`;
-      winnersBody.appendChild(tr);
-    });
-
-    if (isAdmin && winners.length > lastWinnersCount) {
-      const nw = winners[winners.length - 1];
-      const num = nw?.number ?? '?';
-      const prize = nw?.prize ?? 'premio';
-      speak(`Número ${num}, felicidades, ganaste ${prize}.`);
-    }
-    lastWinnersCount = winners.length;
-  }
-
-function render(state) {
-  try {
-    if (!statusEl || !boardEl) return;
-    if (!state) {
-      statusEl.textContent = 'Esperando estado…';
-      boardEl.innerHTML = '';
-      if (winnersBody) winnersBody.innerHTML = '';
-      if (emptyMsg) emptyMsg.style.display = 'block';
-      return;
-    }
-
-    // Arranca/ajusta el auto-next según el estado
-    ensureAutoNext(state);
-
-    // ✅ Cálculos “seguros”
-    const totalShapes = Number.isFinite(state.numShapes) ? state.numShapes : 2;
-    const n           = Number.isFinite(state.numCells)  ? state.numCells  : 20;
-    const shapeTxt    = (state.shapeType || state.shape || 'star');
-    const marcadas    = (state.filledCounts || [])
-      .filter(c => Number.isFinite(c) && c >= totalShapes).length;
-
-    statusEl.textContent =
-      `Estado: forma=${shapeTxt} | celdas=${n} | formas/celda=${totalShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
-
-    if (isEditing) {  // no repintar tablero mientras editas
-      paintWinners(state);
-      lastState = state;
-      return;
-    }
-
-    const cols = gridCols(n);
-    boardEl.style.gridTemplateColumns = `repeat(${cols}, minmax(120px, 1fr))`;
-    boardEl.innerHTML = '';
-
-    for (let i = 0; i < n; i++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-
-      const name = (state.names && state.names[i]) ? state.names[i] : `#${i+1}`;
-      const h4 = document.createElement('h4');
-      h4.textContent = name;
-
-      if (isAdmin) {
-        h4.title = 'Haz clic para editar. Enter o blur para guardar';
-        h4.style.cursor = 'text';
-        h4.addEventListener('click', () => {
-          isEditing = true;
-          editingIndex = i;
-          h4.setAttribute('contenteditable', 'true');
-          h4.focus();
-          try { document.execCommand('selectAll', false, null); } catch {}
-        });
-        const commit = async () => {
-          if (!isEditing || editingIndex !== i) return;
-          h4.removeAttribute('contenteditable');
-          const newName = h4.textContent.trim() || `#${i+1}`;
-          if (state.names[i] !== newName) {
-            state.names[i] = newName;
-            try { await call('setNames', { names: state.names }); } catch {}
-          }
-          isEditing = false;
-          editingIndex = null;
-        };
-        h4.addEventListener('blur', commit);
-        h4.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') { e.preventDefault(); h4.blur(); }
-        });
-      }
-
-      cell.appendChild(h4);
-
-      const shapesWrap = document.createElement('div');
-      shapesWrap.className = 'shapes';
-
-      const type   = (state.shapeType || state.shape || 'star');
-      const filled = Number.isFinite(state.filledCounts?.[i]) ? state.filledCounts[i] : 0;
-
-      for (let j = 0; j < totalShapes; j++) {
-        const d = document.createElement('div');
-        d.className = `shape ${type} ${j < filled ? 'filled' : ''}`;
-        d.innerHTML = shapeSVG(type);
-        shapesWrap.appendChild(d);
-      }
-      cell.appendChild(shapesWrap);
-      boardEl.appendChild(cell);
-    }
-
-    paintWinners(state);
-    lastState = state;
-
-    if (isAdmin && prizesList) drawPrizes(state.prizes || []);
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-
-  // ====== backend ======
-  async function call(action, payload={}) {
-    const res = await fetch('/.netlify/functions/state', {
-      method: 'POST',
-      headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ room, action, ...payload })
-    });
-    const data = await res.json().catch(()=>({}));
-    if (!data.ok) throw new Error(data.error||'Error');
-    return data.state;
-  }
-  async function fetchState() {
-    try {
-      const url = new URL('/.netlify/functions/state', location.origin);
-      url.searchParams.set('room', room);
-      const res = await fetch(url.toString());
       const data = await res.json().catch(()=>({}));
-      if (data && data.ok) return data.state || null;
-      return null;
-    } catch { return null; }
-  }
-
-  // ====== poll ======
-  let didAutoInit = false;
-
-async function poll() {
-  try {
-    const s = await fetchState();
-
-    // Si no hay estado y eres admin, créalo automáticamente solo una vez
-    if (!s && isAdmin && !didAutoInit) {
-      didAutoInit = true;
-      const n  = parseInt(document.querySelector('#numCells')?.value  || '20', 10);
-      const k  = parseInt(document.querySelector('#numShapes')?.value || '2', 10);
-      const sh = (document.querySelector('#shapeType')?.value || 'star');
-      const intervalMs = Math.max(1000, parseInt((document.querySelector('#intervalSec')?.value || '5'),10) * 1000);
-
-      await call('generate', { n, k, shape: sh, intervalMs });
-      return; // No renderices todavía, espera al próximo poll
+      if (!data.ok) throw new Error(data.error || 'Error');
+      return data.state;
+    }
+    async function fetchState(){
+      try{
+        const url = new URL('/.netlify/functions/state', location.origin);
+        url.searchParams.set('room', room);
+        const res = await fetch(url.toString());
+        const data = await res.json().catch(()=>({}));
+        if (data && data.ok) return data.state || null;
+        return null;
+      }catch{ return null; }
     }
 
-    // Renderiza normalmente si ya hay estado
-    render(s);
+    // ====== Render ======
+    let lastWinnersCount = 0;
+    function mapShapeToAllowed(v){
+      // Backend sólo acepta star|circle|diamond
+      if (v === 'heart') return 'diamond';
+      return (['star','circle','diamond'].includes(v) ? v : 'star');
+    }
 
-  } catch(e) {
-    console.error("Error en poll:", e);
-  }
-}
+    function render(state){
+      if (!state){
+        statusEl.textContent = 'Esperando estado…';
+        tableEl.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        winnerEl.textContent = '';
+        return;
+      }
+      emptyMsg.style.display = 'none';
 
-poll();
-setInterval(poll, 1000);
+      const n = Number.isFinite(state.numCells) ? state.numCells : 20;
+      const totalShapes = Number.isFinite(state.numShapes) ? state.numShapes : 2;
+      const type = (state.shapeType || state.shape || 'star');
+      const marcadas = (state.filledCounts||[]).filter(c => Number.isFinite(c) && c >= totalShapes).length;
+      statusEl.textContent = `forma=${type} | celdas=${n} | formas/celda=${totalShapes} | marcadas=${marcadas} | corriendo=${!!state.running}`;
 
-  // ====== eventos admin ======
-  // ====== eventos admin ======
-if (isAdmin) {
-  btnGenerate?.addEventListener('click', async () => {
-    clearAutoNext(); // por si había uno en marcha
-    const n  = parseInt(numCellsEl?.value  || '20',10);
-    const k  = parseInt(numShapesEl?.value || '2',10);
-    const sh = (shapeTypeEl?.value || 'star');
-    const intervalMs = Math.max(
-      1000,
-      parseInt((intervalSecEl?.value || '5'),10) * 1000
-    );
-    await call('generate', { n, k, shape: sh, intervalMs }); // guarda intervalMs
-    poll();
-  });
+      // Pintar tablero (5 columnas por fila)
+      tableEl.innerHTML = '';
+      let row;
+      for (let i=1;i<=n;i++){
+        if ((i-1)%5===0) row = tableEl.insertRow();
+        const cell = row.insertCell();
 
-  btnReset?.addEventListener('click', async () => {
-    clearAutoNext();
-    await call('reset');
-    poll();
-  });
+        const name = (state.names && state.names[i-1]) ? state.names[i-1] : `#${i}`;
+        cell.innerHTML = `
+          <div class="cell-header">#${i}</div>
+          ${isAdmin ? `<input class="name-input" type="text" value="${name}" data-index="${i-1}">`
+                    : `<div class="name-input" style="border:none">${name}</div>`}
+          <div class="shapes"></div>
+        `;
+        const shapesWrap = cell.querySelector('.shapes');
+        const filled = Number.isFinite(state.filledCounts?.[i-1]) ? state.filledCounts[i-1] : 0;
+        for (let j=0;j<totalShapes;j++){
+          const d = document.createElement('div');
+          d.className = `shape ${type} ${j<filled ? 'filled':''}`;
+          shapesWrap.appendChild(d);
+        }
+      }
 
-  btnStart?.addEventListener('click', async () => {
-    await call('start'); // running=true
-    // ensureAutoNext arrancará el timer en el siguiente poll
-    poll();
-  });
+      // Guardado de nombres (on blur / Enter)
+      if (isAdmin){
+        tableEl.querySelectorAll('.name-input').forEach(inp=>{
+          inp.addEventListener('keydown', e=>{
+            if (e.key==='Enter'){ e.preventDefault(); inp.blur(); }
+          });
+          inp.addEventListener('blur', async ()=>{
+            try{
+              const idx = parseInt(inp.dataset.index,10);
+              const names = state.names ? [...state.names] : Array.from({length:n}, (_,k)=>`#${k+1}`);
+              names[idx] = inp.value.trim() || `#${idx+1}`;
+              await call('setNames',{ names });
+              poll(); // refresca
+            }catch{}
+          });
+        });
+      }
 
-  // 🚩 corregido: sin espacios antes de ?.
-  btnStop?.addEventListener('click', async () => {
-    clearAutoNext();
-    await call('stop');
-    poll();
-  });
+      // Premios
+      drawPrizes(state.prizes || []);
 
-  // 🚩 corregido: sin espacios antes de ?.
-  btnNext?.addEventListener('click', async () => {
-    await call('next');
-    poll();
-  });
+      // Ganadores (último)
+      const winners = state.winners || [];
+      if (winners.length){
+        const last = winners[winners.length-1];
+        winnerEl.textContent = `🎉 Ganador: ${last.name || ('#'+(last.number||'?'))} - ${last.prize || 'Premio'}`;
+      } else {
+        winnerEl.textContent = '';
+      }
 
-  btnSaveNames?.addEventListener('click', async () => {
-    const raw = (namesText?.value || '').trim();
-    const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
-    await call('setNames', { names });
-    poll();
-  });
+      // Voz al nuevo ganador
+      if (isAdmin && winners.length > lastWinnersCount){
+        const nw = winners[winners.length-1];
+        const num = nw?.number ?? '?';
+        const prize = nw?.prize ?? 'premio';
+        speak(`Número ${num}, felicidades, ganaste ${prize}`);
+      }
+      lastWinnersCount = winners.length;
+    }
 
-  btnAddPrize?.addEventListener('click', async () => {
-    const name = (newPrizeTxt?.value || '').trim();
-    if (!name) return;
-    await call('addPrize', { prize: name });
-    if (newPrizeTxt) newPrizeTxt.value = '';
-    poll();
-  });
-
-  btnSavePrizes?.addEventListener('click', async () => {
-    if (!prizesList) return;
-    const rows = prizesList.querySelectorAll('input[type="text"]');
-    const prizes = Array.from(rows).map(i => i.value.trim()).filter(Boolean);
-    await call('setPrizes', { prizes });
-    poll();
-  });
-}
-
-
-  // ====== gestor de premios (dibujo) ======
-  function drawPrizes(prizes) {
-    try {
-      if (!prizesList) return;
-      prizesList.innerHTML = '';
-      prizes.forEach((p, idx) => {
-        const row = document.createElement('div');
-        row.className = 'prize-row';
-        const inp = document.createElement('input');
-        inp.type = 'text'; inp.value = p;
-        const del = document.createElement('button');
-        del.textContent = 'Eliminar'; del.className = 'bad';
-        row.appendChild(inp); row.appendChild(del);
-        prizesList.appendChild(row);
-        del.addEventListener('click', async () => {
+    function drawPrizes(list){
+      prizesDiv.innerHTML = '';
+      list.forEach((p, idx)=>{
+        const div = document.createElement('div');
+        div.className = 'prize';
+        div.innerHTML = `Premio ${idx+1}: <input type="text" value="${p}"> <span class="remove-btn">✖</span>`;
+        const input = div.querySelector('input');
+        const del   = div.querySelector('.remove-btn');
+        input.addEventListener('change', async ()=>{
+          const current = Array.from(prizesDiv.querySelectorAll('input')).map(i=>i.value.trim()).filter(Boolean);
+          await call('setPrizes', { prizes: current });
+          poll();
+        });
+        del.addEventListener('click', async ()=>{
           await call('removePrize', { index: idx });
           poll();
         });
+        prizesDiv.appendChild(div);
       });
-    } catch {}
-  }
-</script>
+    }
+
+    // ====== Auto-next (admin local) ======
+    let autoNextTimer = null;
+    let autoNextEvery = null;
+    function clearAutoNext(){
+      if (autoNextTimer){ clearInterval(autoNextTimer); autoNextTimer=null; }
+      autoNextEvery = null;
+    }
+    async function ensureAutoNext(state){
+      if (!isAdmin){ clearAutoNext(); return; }
+      if (!state?.running){ clearAutoNext(); return; }
+      const ms = Math.max(1000, Number(state?.intervalMs)||5000);
+      if (autoNextEvery !== ms){
+        clearAutoNext();
+        autoNextEvery = ms;
+        autoNextTimer = setInterval(async ()=>{
+          try{
+            const s = await call('next');
+            if (!s || (s.availableNumbers||[]).length===0) clearAutoNext();
+          }catch(e){ console.warn('auto-next error', e); }
+        }, ms);
+      }
+    }
+
+    // ====== Poll ======
+    let didAutoInit = false;
+    async function poll(){
+      try{
+        const s = await fetchState();
+        if (!s && isAdmin && !didAutoInit){
+          didAutoInit = true;
+          const n  = parseInt(numCellsEl?.value  || '20',10);
+          const k  = parseInt(numShapesEl?.value || '2',10);
+          const shSel = (shapeTypeEl?.value || 'star');
+          const sh   = mapShapeToAllowed(shSel); // mapear heart->diamond
+          const intervalMs = Math.max(1000, parseInt((intervalEl?.value || '5'),10)*1000);
+          await call('generate',{ n, k, shape: sh, intervalMs });
+          return;
+        }
+        // mantener auto-next acorde al estado
+        ensureAutoNext(s);
+        render(s);
+      }catch(e){ console.error(e); }
+    }
+    poll();
+    setInterval(poll, 1000);
+
+    // ====== Eventos ======
+    if (isAdmin){
+      btnGenerate?.addEventListener('click', async ()=>{
+        clearAutoNext();
+        const n  = parseInt(numCellsEl?.value  || '20',10);
+        const k  = parseInt(numShapesEl?.value || '2',10);
+        const sh = mapShapeToAllowed(shapeTypeEl?.value || 'star');
+        const intervalMs = Math.max(1000, parseInt((intervalEl?.value || '5'),10)*1000);
+        await call('generate', { n, k, shape: sh, intervalMs });
+        poll();
+      });
+      btnReset?.addEventListener('click', async ()=>{
+        clearAutoNext();
+        await call('reset');
+        poll();
+      });
+      btnStart?.addEventListener('click', async ()=>{
+        await call('start');
+        poll();
+      });
+      btnStop?.addEventListener('click', async ()=>{
+        clearAutoNext();
+        await call('stop');
+        poll();
+      });
+      btnNext?.addEventListener('click', async ()=>{
+        await call('next');
+        poll();
+      });
+      btnAddPrize?.addEventListener('click', async ()=>{
+        const div = document.createElement('div');
+        div.className='prize';
+        div.innerHTML = `Premio nuevo: <input type="text"> <span class="remove-btn">✖</span>`;
+        prizesDiv.appendChild(div);
+        const inp = div.querySelector('input');
+        inp.focus();
+        // guarda al vuelo al escribir
+        inp.addEventListener('change', async ()=>{
+          const current = Array.from(prizesDiv.querySelectorAll('input')).map(i=>i.value.trim()).filter(Boolean);
+          // si aún no escribe nada, no guardes
+          if (current.length) await call('setPrizes', { prizes: current });
+          poll();
+        });
+        // eliminar desde el DOM (se re-sincroniza en el próximo poll)
+        div.querySelector('.remove-btn').addEventListener('click', async ()=>{
+          const current = Array.from(prizesDiv.querySelectorAll('.prize'));
+          const idx = current.indexOf(div);
+          if (idx>=0) await call('removePrize', { index: idx });
+          poll();
+        });
+      });
+    }
+  </script>
 </body>
 </html>
+
 
 
 
