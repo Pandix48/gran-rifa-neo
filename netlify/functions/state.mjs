@@ -1,6 +1,5 @@
 // netlify/functions/state.mjs
-// Función mínima sin DB: guarda todo en memoria del proceso.
-// Te sirve para DESCARTAR errores de conexión y arrancar YA.
+// Función mínima en memoria (sin DB) + acciones nuevas: setPrizes y removePrize
 
 const ROOMS = globalThis.__ROOMS__ || new Map();
 globalThis.__ROOMS__ = ROOMS;
@@ -18,7 +17,7 @@ function newState(n = 20, k = 2, shape = 'star') {
     numCells: n,
     numShapes: k,
     shapeType: shape,
-    shape, // compat front
+    shape, // compat
     intervalMs: 5000,
     availableNumbers: Array.from({ length: n }, (_, i) => i + 1),
     names: Array.from({ length: n }, (_, i) => `#${i + 1}`),
@@ -29,30 +28,23 @@ function newState(n = 20, k = 2, shape = 'star') {
   return s;
 }
 
-function get(room) {
-  return ROOMS.get(room) || null;
-}
-function set(room, state) {
-  ROOMS.set(room, state);
-}
+function get(room) { return ROOMS.get(room) || null; }
+function set(room, state) { ROOMS.set(room, state); }
 
 export default async (request) => {
   try {
     if (request.method === 'GET') {
-      // ¡OJO! URL absoluta para evitar "URL is not a constructor"
       const { searchParams } = new URL(request.url, 'http://localhost');
       const room = (searchParams.get('room') || 'demo').trim() || 'demo';
 
       let state = get(room);
-      // Auto-crear si no existe (evita "Esperando estado")
       if (!state) {
         state = newState(20, 2, 'star');
         set(room, state);
       }
 
       return new Response(JSON.stringify({ ok: true, state }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
+        status: 200, headers: { 'content-type': 'application/json' }
       });
     }
 
@@ -111,6 +103,20 @@ export default async (request) => {
           set(room, state);
           break;
         }
+        case 'setPrizes': {
+          const prizes = Array.isArray(body.prizes) ? body.prizes.map(x => x.toString()) : [];
+          state.prizes = prizes;
+          set(room, state);
+          break;
+        }
+        case 'removePrize': {
+          const index = Number(body.index);
+          if (Number.isInteger(index) && index >= 0 && index < (state.prizes || []).length) {
+            state.prizes.splice(index, 1);
+            set(room, state);
+          }
+          break;
+        }
         case 'setNames': {
           const names = Array.isArray(body.names) ? body.names.map(x => x.toString()) : [];
           for (let i = 0; i < Math.min(names.length, state.names.length); i++) {
@@ -139,4 +145,3 @@ export default async (request) => {
     });
   }
 };
-
