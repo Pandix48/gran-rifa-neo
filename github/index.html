@@ -1,162 +1,194 @@
-<!-- fixed build -->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gran Rifa — Netlify + Neon (sin Firebase)</title>
+  <title>Gran Rifa — Netlify DB (modo admin)</title>
   <style>
-    body{font-family:Arial,system-ui,-apple-system,sans-serif;background:#f7fafc;margin:0;color:#111827;text-align:center}
-    header{background:#111827;color:#fff;padding:14px 10px}
-    h1{margin:0;font-size:20px}
-    .wrap{padding:16px}
-    .muted{color:#6b7280;font-size:12px}
-    table{margin:16px auto;border-collapse:collapse}
-    td{border:1px solid #cbd5e1;padding:10px;min-width:120px;text-align:center;background:#fff}
-    .cell-header{font-weight:bold;margin-bottom:5px}
-    .name{font-size:13px;margin-top:2px;color:#334155}
-    .shapes{display:flex;justify-content:center;flex-wrap:wrap;gap:5px;margin-top:6px}
-    .shape{width:20px;height:20px;opacity:.25}
-    .shape.filled{opacity:1}
-    .star{clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);background:gold}
-    .circle{border-radius:50%;background:steelblue}
-    .diamond{background:rebeccapurple;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)}
-    .controls{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));max-width:1000px;margin:0 auto 10px}
-    .panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;text-align:left}
-    .panel h3{margin:0 0 8px;font-size:16px}
+    body{font-family:system-ui, -apple-system, sans-serif;background:#f7fafc;margin:0;color:#111827}
+    header{background:#111827;color:#fff;padding:14px}
+    h1{margin:0;font-size:20px;text-align:center}
+    .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
+    .muted{color:#6b7280}
+    .panel{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:14px 0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
     .row{display:flex;gap:8px;align-items:center;margin:6px 0}
-    input,select,button{padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px}
-    button{cursor:pointer}
-    .primary{background:#22c55e;color:#fff;border:0}
-    .warn{background:#ef4444;color:#fff;border:0}
+    label{min-width:140px;color:#374151}
+    input, select, textarea{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px}
+    textarea{min-height:120px}
+    button{cursor:pointer;border:1px solid #94a3b8;background:#111827;color:#fff;border-radius:10px;padding:9px 12px}
+    button.primary{background:#2563eb;border-color:#1d4ed8}
     .admin-only{display:none}
-    .winner{font-size:1.2em;color:#065f46;margin:12px 0 4px}
-    code{background:#eef2f7;padding:2px 6px;border-radius:6px}
+    table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+    td,th{border-top:1px solid #e5e7eb;padding:8px;text-align:left}
+    code{background:#eef2ff;padding:2px 6px;border-radius:6px}
+    .center{ text-align:center;color:#6b7280;margin:28px 0 }
   </style>
 </head>
 <body>
   <header>
-    <h1>Gran Rifa — Netlify DB (modo <span id="modeLabel">viewer</span>)</h1>
+    <h1>Gran Rifa — Netlify DB (modo <span id="modeLabel">admin</span>)</h1>
   </header>
 
   <div class="wrap">
     <div id="status" class="muted">Conectando…</div>
 
     <!-- Controles de admin -->
-    <div id="adminControls" class="controls admin-only" aria-hidden="true">
-      <div class="panel">
-        <h3>Configuración</h3>
-        <div class="row"><label style="width:40%">Celdas</label><input id="numCells" type="number" value="20" min="1" /></div>
-        <div class="row"><label style="width:40%">Formas/celda</label><input id="numShapes" type="number" value="2" min="1" /></div>
-        <div class="row"><label style="width:40%">Forma</label>
+    <div id="adminControls" class="panel admin-only">
+      <h3>Controles (admin)</h3>
+      <div class="grid">
+
+        <div class="row"><label for="numCells">Celdas</label>
+          <input id="numCells" type="number" value="20" min="1" />
+        </div>
+
+        <div class="row"><label for="numShapes">Formas / celdas</label>
+          <input id="numShapes" type="number" value="2" min="1" />
+        </div>
+
+        <div class="row"><label for="shapeType">Forma</label>
           <select id="shapeType">
-            <option value="star">⭐ Estrella</option>
-            <option value="circle">⚪ Círculo</option>
-            <option value="diamond">💎 Diamante</option>
+            <option value="star">Estrella</option>
+            <option value="circle">Círculo</option>
+            <option value="diamond">Diamante</option>
           </select>
         </div>
-        <div class="row"><label style="width:40%">Intervalo (seg)</label><input id="intervalSec" type="number" value="5" min="1" /></div>
-        <div class="row">
-          <button class="primary" id="btnGenerate">Generar tablero</button>
-          <button id="btnReset">Reiniciar</button>
-        </div>
-      </div>
 
-      <div class="panel">
-        <h3>Participantes y premios</h3>
-        <div class="row">
-          <input id="bulkNames" type="text" placeholder="Nombres separados por coma (posición 1..N)" />
-          <button id="btnSetNames">Cargar nombres</button>
+        <div class="row"><label for="intervalSec">Intervalo (seg)</label>
+          <input id="intervalSec" type="number" value="5" min="1" />
         </div>
+
         <div class="row">
+          <button id="btnGenerate" class="primary">Generar tablero</button>
+          <button id="btnReset">Reset</button>
+          <button id="btnStart">Start</button>
+          <button id="btnStop">Stop</button>
+          <button id="btnNext">Next</button>
           <button id="btnAddPrize">Añadir premio</button>
         </div>
-      </div>
 
-      <div class="panel">
-        <h3>Control</h3>
+        <div class="row" style="grid-column:1/-1; align-items:flex-start;">
+          <label for="txtBulkNames" style="min-width:180px;">Nombres (uno por línea)</label>
+          <textarea id="txtBulkNames" placeholder="Escribe cada nombre en una nueva línea…"></textarea>
+        </div>
+
         <div class="row">
-          <button class="primary" id="btnStart">Iniciar</button>
-          <button class="warn" id="btnStop">Detener</button>
-          <button id="btnNext">Anunciar ahora</button>
+          <button id="btnSetNames">Guardar nombres</button>
         </div>
       </div>
-      <p class="muted">Comparte el link con <code>?room=TU_SALA</code>. Tú controlas con <code>&admin=1</code>.</p>
     </div>
 
-    <div id="winner" class="winner"></div>
-    <table id="raffleTable" role="grid" aria-live="polite"></table>
+    <div class="panel">
+      <h3>Resumen</h3>
+      <div id="winner" class="row muted">—</div>
+      <table id="winners" aria-live="polite">
+        <thead><tr><th>#</th><th>Ganador</th></tr></thead>
+        <tbody id="winnersBody"></tbody>
+      </table>
+    </div>
+
+    <div id="emptyMsg" class="center" style="display:none;">No hay datos todavía.</div>
   </div>
 
   <script>
+    // ========= CONFIG INICIAL =========
+    // Fuerza modo admin
+    const mode = "admin";
+    const isAdmin = true;
+    document.getElementById("modeLabel").textContent = mode;
+    const adminPanel = document.getElementById("adminControls");
+    adminPanel.classList.remove("admin-only");
+    adminPanel.removeAttribute("aria-hidden");
+
+    // Room desde la URL o "demo"
     const params = new URLSearchParams(location.search);
-    const isAdmin = params.get('admin') === '1';
-    const room = (params.get('room') || 'demo').trim() || 'demo';
-    document.getElementById('modeLabel').textContent = isAdmin ? 'admin' : 'viewer';
-    if (isAdmin) { const ac = document.getElementById('adminControls'); ac.classList.remove('admin-only'); ac.removeAttribute('aria-hidden'); }
+    const room = params.get("room") || "demo";
 
-    const statusEl = document.getElementById('status');
-    const tableEl = document.getElementById('raffleTable');
-    const winnerEl = document.getElementById('winner');
+    // Elementos UI
+    const statusEl = document.getElementById("status");
+    const winnerEl = document.getElementById("winner");
+    const winnersBody = document.getElementById("winnersBody");
+    const emptyMsg = document.getElementById("emptyMsg");
 
-    function render(state){
-      if (!state){ statusEl.textContent = `Sala: ${room} · esperando estado…`; tableEl.innerHTML=''; winnerEl.textContent=''; return; }
-      tableEl.innerHTML = '';
-      const cols = 5;
-      let rowEl;
-      for(let i=1;i<=state.numCells;i++){
-        if((i-1)%cols===0) rowEl = tableEl.insertRow();
-        const cell = rowEl.insertCell();
-        const filled = state.filledCounts[i-1] || 0;
-        const shapes = Array.from({length: state.numShapes}, (_,s)=>`<div class="shape ${state.shapeType} ${s<filled?'filled':''}"></div>`).join('');
-        cell.innerHTML = `<div class="cell-header">#${i}</div><div class="name">${state.names[i-1]||('#'+i)}</div><div class="shapes">${shapes}</div>`;
+    // ========= RENDER =========
+    function render(state) {
+      if (!state) {
+        statusEl.textContent = "Esperando estado…";
+        winnersBody.innerHTML = "";
+        winnerEl.textContent = "—";
+        emptyMsg.style.display = "block";
+        return;
       }
-      const last = (state.winners||[]).length ? state.winners[state.winners.length-1] : null;
-      winnerEl.textContent = last ? `🎉 Ganador: ${last.name} — ${last.prize||'Premio'}` : '';
-      statusEl.textContent = `Sala: ${room} · ${state.running? 'EN VIVO':'detenido'} · Ganadores: ${(state.winners||[]).length}`;
+      emptyMsg.style.display = "none";
+      statusEl.textContent = `Estado: forma=${state.shape} | celdas ocupadas=${(state.filled||[]).length} | corriendo=${!!state.running}`;
+
+      // Ganador actual (si hubiera)
+      const current = (state.winners && state.winners.length) ? state.winners[state.winners.length - 1] : null;
+      winnerEl.textContent = current ? `Ganador: ${current}` : "Sin ganador aún";
+
+      // Tabla de ganadores
+      winnersBody.innerHTML = "";
+      (state.winners||[]).forEach((name, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${i+1}</td><td>${name}</td>`;
+        winnersBody.appendChild(tr);
+      });
     }
 
-    // Polling: trae el estado cada 1500ms desde la Function (Netlify + Neon)
-    let pollTimer = null;
-    async function poll(){
-      try{
-        const res = await fetch('/.netlify/functions/state?room=' + encodeURIComponent(room));
+    // ========= CONSULTA (GET) =========
+    async function fetchState() {
+      try {
+        const res = await fetch(`/.netlify/functions/state?room=${encodeURIComponent(room)}`);
         const data = await res.json();
         render(data.state || null);
-      }catch(e){ statusEl.textContent = 'No se pudo leer estado.'; }
+      } catch (e) {
+        statusEl.textContent = "No se pudo leer estado.";
+        console.error(e);
+      }
     }
-    poll(); pollTimer = setInterval(poll, 1500);
 
-    // --- Acciones admin ---
-    async function call(action, payload={}){
-      const res = await fetch('/.netlify/functions/state', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ room, action, ...payload })
+    // Polling
+    fetchState();
+    let pollTimer = setInterval(fetchState, 1500);
+
+    // ========= ACCIONES (POST) =========
+    async function call(action, payload = {}) {
+      const res = await fetch(`/.netlify/functions/state`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ room, action, payload })
       });
       return res.json();
     }
 
-    if (isAdmin){
-      document.getElementById('btnGenerate').onclick = ()=>{
-        const n = parseInt(document.getElementById('numCells').value||'20');
-        const k = parseInt(document.getElementById('numShapes').value||'2');
-        const shape = document.getElementById('shapeType').value||'star';
-        const intervalSec = Math.max(1, parseInt(document.getElementById('intervalSec').value||'5'));
-        return call('generate', { n, k, shape, intervalMs: intervalSec*1000 });
+    // ========= BIND BOTONES ADMIN =========
+    if (isAdmin) {
+      const $ = (id) => document.getElementById(id);
+
+      $("btnGenerate").onclick = () => {
+        const n = parseInt($("numCells").value || "20", 10);
+        const k = parseInt($("numShapes").value || "2", 10);
+        const shape = $("shapeType").value || "star";
+        const intervalSec = Math.max(1, parseInt($("intervalSec").value || "5", 10));
+        return call("generate", { n, k, shape, intervalMs: intervalSec * 1000 });
       };
-      document.getElementById('btnReset').onclick = ()=> call('reset', {});
-      document.getElementById('btnStart').onclick = ()=> call('start', {});
-      document.getElementById('btnStop').onclick = ()=> call('stop', {});
-      document.getElementById('btnNext').onclick = ()=> call('next', {});
-      document.getElementById('btnAddPrize').onclick = async ()=>{
-        const txt = prompt('Nombre del premio:'); if(!txt) return;
-        await call('addPrize', { prize: txt });
+
+      $("btnReset").onclick = () => call("reset", {});
+      $("btnStart").onclick = () => call("start", {});
+      $("btnStop").onclick  = () => call("stop", {});
+      $("btnNext").onclick  = () => call("next", {});
+
+      $("btnAddPrize").onclick = async () => {
+        const prize = prompt("Nombre del premio:");
+        if (!prize) return;
+        await call("addPrize", { prize });
       };
-      document.getElementById('btnSetNames').onclick = async ()=>{
-        const raw = document.getElementById('bulkNames').value.trim(); if(!raw) return;
-        const arr = raw.split(',').map(s=>s.trim()).filter(Boolean);
-        await call('setNames', { names: arr });
+
+      $("btnSetNames").onclick = async () => {
+        const raw = $("txtBulkNames").value.trim();
+        if (!raw) return;
+        const names = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        await call("setNames", { names });
       };
     }
   </script>
